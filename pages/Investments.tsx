@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useFinance } from '../FinanceContext';
 import { 
   TrendingUp, Landmark, Target, Plus, Trash2, Edit2,
@@ -22,6 +22,14 @@ export const Investments: React.FC = () => {
   const [showGoalModal, setShowGoalModal] = useState(false);
   const [editingInvId, setEditingInvId] = useState<string | null>(null);
   const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    const handle = requestAnimationFrame(() => {
+      setIsMounted(true);
+    });
+    return () => cancelAnimationFrame(handle);
+  }, []);
 
   const [invForm, setInvForm] = useState({
     name: '',
@@ -160,29 +168,31 @@ export const Investments: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-8">
-          <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm relative overflow-hidden">
+          <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm relative overflow-hidden min-w-0">
              <div className="absolute top-0 right-0 p-8 opacity-5">
                 <Landmark className="w-32 h-32" />
              </div>
              <p className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-1">Patrimônio Investido</p>
              <h2 className="text-4xl font-black text-slate-900 mb-6">{formatCurrency(totalInvested)}</h2>
              
-             <div className="h-[250px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={evolutionData}>
-                    <defs>
-                      <linearGradient id="colorVal" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.1}/>
-                        <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                    <Tooltip 
-                      contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 25px rgba(0,0,0,0.05)' }}
-                      formatter={(val: number) => formatCurrency(val)}
-                    />
-                    <Area type="monotone" dataKey="value" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorVal)" />
-                  </AreaChart>
-                </ResponsiveContainer>
+             <div className="h-[250px] w-full min-w-0 overflow-hidden">
+                {isMounted && (
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                    <AreaChart data={evolutionData}>
+                      <defs>
+                        <linearGradient id="colorVal" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.1}/>
+                          <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <Tooltip 
+                        contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 25px rgba(0,0,0,0.05)' }}
+                        formatter={(val: number) => formatCurrency(val)}
+                      />
+                      <Area type="monotone" dataKey="value" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorVal)" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                )}
              </div>
           </div>
 
@@ -231,11 +241,11 @@ export const Investments: React.FC = () => {
         </div>
 
         <div className="space-y-8">
-          <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+          <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm overflow-hidden min-w-0">
              <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-6">Alocação de Ativos</h3>
-             <div className="h-[200px] w-full">
-                {investmentDistribution.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
+             <div className="h-[200px] w-full min-w-0">
+                {isMounted && investmentDistribution.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                     <PieChart>
                       <Pie
                         data={investmentDistribution}
@@ -253,11 +263,11 @@ export const Investments: React.FC = () => {
                       <Tooltip formatter={(val: number) => formatCurrency(val)} />
                     </PieChart>
                   </ResponsiveContainer>
-                ) : (
+                ) : isMounted ? (
                   <div className="h-full flex items-center justify-center text-slate-300 text-xs text-center p-4 italic">
                     Adicione ativos para ver sua distribuição.
                   </div>
-                )}
+                ) : null}
              </div>
              <div className="mt-4 space-y-2">
                 {investmentDistribution.map(item => (

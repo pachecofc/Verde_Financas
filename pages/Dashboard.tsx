@@ -12,7 +12,11 @@ export const Dashboard: React.FC = () => {
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
-    setIsMounted(true);
+    // Usar requestAnimationFrame garante que o componente está realmente pintado no DOM
+    const handle = requestAnimationFrame(() => {
+      setIsMounted(true);
+    });
+    return () => cancelAnimationFrame(handle);
   }, []);
 
   const [selectedMonth, setSelectedMonth] = useState(() => {
@@ -37,7 +41,6 @@ export const Dashboard: React.FC = () => {
     const currentMonth = now.getMonth();
 
     const data = [];
-    // Gerar range: 3 meses atrás até 2 meses à frente (Total 6 meses)
     for (let i = -3; i <= 2; i++) {
       const d = new Date(currentYear, currentMonth + i, 1);
       const m = d.getMonth();
@@ -50,7 +53,6 @@ export const Dashboard: React.FC = () => {
       let predictedIncome = 0;
       let predictedExpense = 0;
 
-      // 1. Somar transações já realizadas
       transactions.forEach(t => {
         if (t.date.startsWith(monthKey)) {
           if (t.type === 'income') realizedIncome += t.amount;
@@ -58,11 +60,9 @@ export const Dashboard: React.FC = () => {
         }
       });
 
-      // 2. Projetar agendamentos se for mês atual ou futuro
       if (isFuture) {
         schedules.forEach(s => {
           const sDate = new Date(s.date + 'T00:00:00');
-          // Simplificação: se o agendamento começou antes ou neste mês
           if (sDate <= new Date(y, m + 1, 0)) {
             let occurrences = 0;
             if (s.frequency === 'once') {
@@ -92,9 +92,6 @@ export const Dashboard: React.FC = () => {
       });
     }
 
-    // Calcular saldo acumulado simplificado para o gráfico
-    let runningBalance = totalBalance; // Começamos do saldo hoje e voltamos/avançamos
-    // Para simplificar a visualização do fluxo, vamos apenas mostrar o saldo líquido mensal no gráfico de área
     return data.map(item => ({
       ...item,
       netFlow: item.totalIncome - item.totalExpense
@@ -140,7 +137,6 @@ export const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4 hover:shadow-md transition-shadow">
           <div className="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
@@ -173,8 +169,7 @@ export const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Fluxo de Caixa Central (Novo) */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+      <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
         <div className="flex items-center justify-between mb-8">
           <div>
             <h3 className="text-lg font-bold text-slate-800">Fluxo de Caixa: Realizado vs Previsto</h3>
@@ -187,9 +182,9 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
         
-        <div className="h-[350px] w-full">
+        <div className="h-[350px] w-full min-w-0">
           {isMounted && (
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <ComposedChart data={cashFlowData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                 <XAxis 
@@ -211,10 +206,10 @@ export const Dashboard: React.FC = () => {
                   cursor={{ fill: '#f8fafc' }}
                   formatter={(value: number, name: string) => [formatCurrency(value), name]}
                 />
-                <Bar name="Receita Realizada" dataKey="realizedIncome" stackId="a" fill="#10b981" radius={[0, 0, 0, 0]} />
+                <Bar name="Receita Realizada" dataKey="realizedIncome" stackId="a" fill="#10b981" />
                 <Bar name="Receita Prevista" dataKey="predictedIncome" stackId="a" fill="#10b981" opacity={0.3} radius={[4, 4, 0, 0]} />
                 
-                <Bar name="Despesa Realizada" dataKey="realizedExpense" stackId="b" fill="#f43f5e" radius={[0, 0, 0, 0]} />
+                <Bar name="Despesa Realizada" dataKey="realizedExpense" stackId="b" fill="#f43f5e" />
                 <Bar name="Despesa Prevista" dataKey="predictedExpense" stackId="b" fill="#f43f5e" opacity={0.3} radius={[4, 4, 0, 0]} />
                 
                 <Area 
@@ -237,8 +232,7 @@ export const Dashboard: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Distribuição de Gastos */}
-        <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+        <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
             <h3 className="text-lg font-bold text-slate-800">Distribuição de Gastos</h3>
             <div className="relative inline-flex items-center">
@@ -255,9 +249,9 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
 
-          <div className="h-[300px] w-full min-h-[300px]">
+          <div className="h-[300px] w-full min-h-[300px] min-w-0">
             {isMounted && expenseByCategory.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                 <RePieChart>
                   <Pie
                     data={expenseByCategory}
@@ -290,7 +284,6 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Orçamentos Críticos */}
         <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
            <h3 className="text-lg font-bold text-slate-800 mb-6">Alertas de Orçamento</h3>
            <div className="space-y-6">
