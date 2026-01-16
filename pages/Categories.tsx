@@ -1,13 +1,28 @@
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useFinance } from '../FinanceContext';
-import { Plus, Trash2, Edit2, ChevronRight } from 'lucide-react';
+import { Plus, Trash2, Edit2, ChevronRight, X, Smile } from 'lucide-react';
 import { Category } from '../types';
+
+// Lista de emojis sugeridos por categoria para facilitar o uso
+const EMOJI_LIST = [
+  { label: 'Finanças', emojis: ['💰', '💳', '💸', '🏦', '🪙', '📈', '📊', '🏧', '🧾', '💎'] },
+  { label: 'Alimentação', emojis: ['🍎', '🍔', '🍕', '🍱', '☕', '🍦', '🍩', '🥐', '🥗', '🥦'] },
+  { label: 'Transporte', emojis: ['🚗', '🚌', '✈️', '⛽', '🚲', '🛴', '🚕', '🚂', '⚓', '🏎️'] },
+  { label: 'Moradia', emojis: ['🏠', '💡', '🛠️', '🧺', '🧼', '🛋️', '🔑', '🪑', '🚿', '🪴'] },
+  { label: 'Lazer', emojis: ['🎨', '🎬', '🎮', '⚽', '🏖️', '🍿', '🎸', '🎟️', '🎪', '🎢'] },
+  { label: 'Saúde', emojis: ['💊', '🏥', '🍎', '👟', '🦷', '🧘', '🚲', '🩺', '👓', '🌡️'] },
+  { label: 'Compras', emojis: ['🛒', '🛍️', '🎁', '📦', '🧸', '👗', '👟', '🕶️', '💄', '💍'] },
+  { label: 'Tecnologia', emojis: ['📱', '💻', '🖥️', '⌨️', '🎧', '📷', '🔋', '🖱️', '🔌', '📡'] },
+];
 
 export const Categories: React.FC = () => {
   const { categories, addCategory, updateCategory, deleteCategory } = useFinance();
   const [showModal, setShowModal] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const pickerRef = useRef<HTMLDivElement>(null);
+
   const [formData, setFormData] = useState({ 
     name: '', 
     type: 'expense' as 'income' | 'expense', 
@@ -15,6 +30,17 @@ export const Categories: React.FC = () => {
     color: '#10b981',
     parentId: ''
   });
+
+  // Fecha o seletor ao clicar fora
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (pickerRef.current && !pickerRef.current.contains(event.target as Node)) {
+        setShowEmojiPicker(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const handleEdit = (cat: Category) => {
     setEditingId(cat.id);
@@ -30,6 +56,7 @@ export const Categories: React.FC = () => {
 
   const handleCloseModal = () => {
     setShowModal(false);
+    setShowEmojiPicker(false);
     setEditingId(null);
     setFormData({ name: '', type: 'expense', icon: '📦', color: '#10b981', parentId: '' });
   };
@@ -49,7 +76,11 @@ export const Categories: React.FC = () => {
     handleCloseModal();
   };
 
-  // Filtra as categorias que podem ser pais (do mesmo tipo e que não são elas mesmas subcategorias)
+  const selectEmoji = (emoji: string) => {
+    setFormData({ ...formData, icon: emoji });
+    setShowEmojiPicker(false);
+  };
+
   const potentialParents = categories.filter(c => 
     c.type === formData.type && 
     !c.parentId && 
@@ -74,7 +105,6 @@ export const Categories: React.FC = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         {categories
           .sort((a, b) => {
-            // Ordenar por tipo e depois alfabeticamente (pais primeiro)
             if (a.type !== b.type) return a.type === 'income' ? -1 : 1;
             const aParent = a.parentId ? categories.find(c => c.id === a.parentId)?.name : '';
             const bParent = b.parentId ? categories.find(c => c.id === b.parentId)?.name : '';
@@ -126,7 +156,11 @@ export const Categories: React.FC = () => {
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={handleCloseModal} />
           <div className="relative bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 animate-in zoom-in duration-300">
-            <h3 className="text-xl font-bold mb-4">{editingId ? 'Editar Categoria' : 'Nova Categoria'}</h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold">{editingId ? 'Editar Categoria' : 'Nova Categoria'}</h3>
+              <button onClick={handleCloseModal} className="p-1 hover:bg-slate-100 rounded-full text-slate-400 transition-colors"><X className="w-5 h-5" /></button>
+            </div>
+            
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Nome da Categoria</label>
@@ -145,9 +179,47 @@ export const Categories: React.FC = () => {
                     <option value="income">Receita</option>
                   </select>
                 </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Ícone (Emoji)</label>
-                  <input placeholder="Ex: 🍎, 🏠" className="w-full px-4 py-2 border border-slate-200 rounded-lg text-center outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all" value={formData.icon} onChange={e => setFormData({...formData, icon: e.target.value})} />
+                
+                <div className="space-y-1 relative" ref={pickerRef}>
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Ícone</label>
+                  <div className="relative">
+                    <input 
+                      readOnly
+                      onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                      className="w-full px-4 py-2 border border-slate-200 rounded-lg text-center text-xl cursor-pointer hover:border-emerald-500 transition-all outline-none bg-slate-50" 
+                      value={formData.icon} 
+                    />
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-300">
+                      <Smile className="w-4 h-4" />
+                    </div>
+                  </div>
+
+                  {/* Emoji Picker Popover */}
+                  {showEmojiPicker && (
+                    <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-100 rounded-2xl shadow-2xl z-[70] overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                      <div className="p-2 border-b border-slate-50 bg-slate-50/50 flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2">Escolha um ícone</span>
+                        <button type="button" onClick={() => setShowEmojiPicker(false)} className="p-1 hover:bg-slate-200 rounded-full text-slate-400"><X className="w-3 h-3" /></button>
+                      </div>
+                      <div className="max-h-[220px] overflow-y-auto p-3 grid grid-cols-5 gap-2 custom-scrollbar">
+                        {EMOJI_LIST.map((group) => (
+                          <React.Fragment key={group.label}>
+                            <div className="col-span-5 text-[9px] font-bold text-slate-400 uppercase tracking-tighter mt-2 first:mt-0">{group.label}</div>
+                            {group.emojis.map(emoji => (
+                              <button
+                                key={emoji}
+                                type="button"
+                                onClick={() => selectEmoji(emoji)}
+                                className="w-full aspect-square flex items-center justify-center text-xl hover:bg-emerald-50 rounded-lg transition-colors"
+                              >
+                                {emoji}
+                              </button>
+                            ))}
+                          </React.Fragment>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
