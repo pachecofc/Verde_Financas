@@ -271,14 +271,38 @@ export const Schedule: React.FC = () => {
              </div>
              <div className="grid grid-cols-7 gap-1">
                 {calendarDays.map((day, idx) => {
-                  const hasItems = day && schedules.some(s => isScheduledOnDay(day, s.date));
-                  const isToday = day && day === new Date().getDate() && currentDate.getMonth() === new Date().getMonth();
+                  if (!day) return <div key={idx} className="aspect-square" />;
+
+                  // Lógica de destaque por tipo de lançamento
+                  const daySchedules = schedules.filter(s => isScheduledOnDay(day, s.date));
+                  const hasExpense = daySchedules.some(s => s.type === 'expense' || s.type === 'transfer');
+                  const hasIncome = daySchedules.some(s => s.type === 'income');
+                  const isToday = day === new Date().getDate() && currentDate.getMonth() === new Date().getMonth() && currentDate.getFullYear() === new Date().getFullYear();
+
+                  let dayClasses = "text-slate-600 hover:bg-slate-50";
+                  
+                  if (isToday) {
+                    dayClasses = "bg-emerald-600 text-white font-bold shadow-md shadow-emerald-100";
+                  } else if (hasExpense) {
+                    dayClasses = "bg-rose-50 text-rose-700 font-bold border border-rose-100/50";
+                  } else if (hasIncome) {
+                    dayClasses = "bg-emerald-50 text-emerald-700 font-bold border border-emerald-100/50";
+                  }
+
                   return (
-                    <div key={idx} className={`aspect-square flex items-center justify-center text-xs rounded-lg transition-all ${!day ? '' : isToday ? 'bg-emerald-600 text-white font-bold' : hasItems ? 'bg-emerald-50 text-emerald-700 font-bold' : 'text-slate-600 hover:bg-slate-50'}`}>
+                    <div key={idx} className={`aspect-square flex items-center justify-center text-xs rounded-lg transition-all ${dayClasses}`}>
                       {day}
                     </div>
                   );
                 })}
+             </div>
+             <div className="mt-6 space-y-2">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Legenda</p>
+                <div className="flex items-center gap-3">
+                   <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 bg-emerald-50 border border-emerald-100 rounded" /> <span className="text-[10px] text-slate-500">Receita</span></div>
+                   <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 bg-rose-50 border border-rose-100 rounded" /> <span className="text-[10px] text-slate-500">Despesa</span></div>
+                   <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 bg-emerald-600 rounded" /> <span className="text-[10px] text-slate-500">Hoje</span></div>
+                </div>
              </div>
           </div>
         </div>
