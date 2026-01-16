@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { useFinance } from '../FinanceContext';
 import { 
-  TrendingUp, Landmark, Target, Plus, Trash2, 
+  TrendingUp, Landmark, Target, Plus, Trash2, Edit2,
   ChevronRight, ArrowUpRight, Award, Wallet, X, Smile
 } from 'lucide-react';
 import { 
@@ -12,9 +12,16 @@ import {
 import { Investment, Goal } from '../types';
 
 export const Investments: React.FC = () => {
-  const { investments, goals, addInvestment, deleteInvestment, addGoal, deleteGoal, updateGoal } = useFinance();
+  const { 
+    investments, goals, 
+    addInvestment, updateInvestment, deleteInvestment, 
+    addGoal, updateGoal, deleteGoal 
+  } = useFinance();
+  
   const [showInvModal, setShowInvModal] = useState(false);
   const [showGoalModal, setShowGoalModal] = useState(false);
+  const [editingInvId, setEditingInvId] = useState<string | null>(null);
+  const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
 
   const [invForm, setInvForm] = useState({
     name: '',
@@ -52,7 +59,6 @@ export const Investments: React.FC = () => {
     return Object.values(types).filter(t => t.value > 0);
   }, [investments]);
 
-  // Dados fictícios para o gráfico de evolução (já que o app é offline/local)
   const evolutionData = [
     { name: 'Jan', value: totalInvested * 0.8 },
     { name: 'Fev', value: totalInvested * 0.85 },
@@ -64,25 +70,69 @@ export const Investments: React.FC = () => {
   const formatCurrency = (val: number) => 
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
-  const handleAddInvestment = (e: React.FormEvent) => {
-    e.preventDefault();
-    addInvestment({
-      ...invForm,
-      amount: parseFloat(invForm.amount)
-    });
-    setShowInvModal(false);
-    setInvForm({ name: '', type: 'fixed', amount: '', institution: '', color: '#10b981' });
+  const handleOpenInvModal = (inv?: Investment) => {
+    if (inv) {
+      setEditingInvId(inv.id);
+      setInvForm({
+        name: inv.name,
+        type: inv.type,
+        amount: inv.amount.toString(),
+        institution: inv.institution,
+        color: inv.color
+      });
+    } else {
+      setEditingInvId(null);
+      setInvForm({ name: '', type: 'fixed', amount: '', institution: '', color: '#10b981' });
+    }
+    setShowInvModal(true);
   };
 
-  const handleAddGoal = (e: React.FormEvent) => {
+  const handleOpenGoalModal = (goal?: Goal) => {
+    if (goal) {
+      setEditingGoalId(goal.id);
+      setGoalForm({
+        name: goal.name,
+        targetAmount: goal.targetAmount.toString(),
+        currentAmount: goal.currentAmount.toString(),
+        icon: goal.icon,
+        color: goal.color
+      });
+    } else {
+      setEditingGoalId(null);
+      setGoalForm({ name: '', targetAmount: '', currentAmount: '', icon: '🎯', color: '#10b981' });
+    }
+    setShowGoalModal(true);
+  };
+
+  const handleInvSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    addGoal({
+    const data = {
+      ...invForm,
+      amount: parseFloat(invForm.amount)
+    };
+
+    if (editingInvId) {
+      updateInvestment(editingInvId, data);
+    } else {
+      addInvestment(data);
+    }
+    setShowInvModal(false);
+  };
+
+  const handleGoalSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const data = {
       ...goalForm,
       targetAmount: parseFloat(goalForm.targetAmount),
       currentAmount: parseFloat(goalForm.currentAmount)
-    });
+    };
+
+    if (editingGoalId) {
+      updateGoal(editingGoalId, data);
+    } else {
+      addGoal(data);
+    }
     setShowGoalModal(false);
-    setGoalForm({ name: '', targetAmount: '', currentAmount: '', icon: '🎯', color: '#10b981' });
   };
 
   return (
@@ -94,13 +144,13 @@ export const Investments: React.FC = () => {
         </div>
         <div className="flex gap-2">
            <button 
-            onClick={() => setShowGoalModal(true)}
+            onClick={() => handleOpenGoalModal()}
             className="flex items-center gap-2 bg-white text-emerald-600 border border-emerald-100 px-5 py-3 rounded-xl hover:bg-emerald-50 transition-all font-semibold"
           >
             <Target className="w-4 h-4" /> Nova Meta
           </button>
           <button 
-            onClick={() => setShowInvModal(true)}
+            onClick={() => handleOpenInvModal()}
             className="flex items-center gap-2 bg-emerald-600 text-white px-5 py-3 rounded-xl hover:bg-emerald-700 transition-all font-semibold shadow-lg shadow-emerald-100"
           >
             <Plus className="w-5 h-5" /> Adicionar Ativo
@@ -109,7 +159,6 @@ export const Investments: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Lado Esquerdo: Patrimônio e Gráfico */}
         <div className="lg:col-span-2 space-y-8">
           <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm relative overflow-hidden">
              <div className="absolute top-0 right-0 p-8 opacity-5">
@@ -146,12 +195,15 @@ export const Investments: React.FC = () => {
                   const percent = Math.min((goal.currentAmount / goal.targetAmount) * 100, 100);
                   const isDone = percent >= 100;
                   return (
-                    <div key={goal.id} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm group hover:border-emerald-200 transition-all">
+                    <div key={goal.id} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm group hover:border-emerald-200 transition-all relative">
                        <div className="flex justify-between items-start mb-4">
                           <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl shadow-sm ${isDone ? 'bg-amber-50 animate-bounce' : 'bg-slate-50'}`}>
                              {isDone ? '👑' : goal.icon}
                           </div>
-                          <button onClick={() => deleteGoal(goal.id)} className="text-slate-200 hover:text-rose-500 p-1"><X className="w-4 h-4" /></button>
+                          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onClick={() => handleOpenGoalModal(goal)} className="text-slate-300 hover:text-emerald-500 p-1"><Edit2 className="w-4 h-4" /></button>
+                            <button onClick={() => deleteGoal(goal.id)} className="text-slate-300 hover:text-rose-500 p-1"><X className="w-4 h-4" /></button>
+                          </div>
                        </div>
                        <h4 className="font-bold text-slate-800 mb-1">{goal.name}</h4>
                        <div className="flex justify-between text-xs font-bold mb-2">
@@ -178,7 +230,6 @@ export const Investments: React.FC = () => {
           </div>
         </div>
 
-        {/* Lado Direito: Distribuição e Ativos */}
         <div className="space-y-8">
           <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
              <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-6">Alocação de Ativos</h3>
@@ -238,9 +289,14 @@ export const Investments: React.FC = () => {
                            <p className="text-[10px] text-slate-400 uppercase font-bold tracking-tighter">{inv.institution}</p>
                         </div>
                      </div>
-                     <div className="text-right">
-                        <p className="text-sm font-bold text-slate-900">{formatCurrency(inv.amount)}</p>
-                        <button onClick={() => deleteInvestment(inv.id)} className="text-slate-200 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-3 h-3" /></button>
+                     <div className="flex items-center gap-3">
+                        <div className="text-right">
+                           <p className="text-sm font-bold text-slate-900">{formatCurrency(inv.amount)}</p>
+                        </div>
+                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                           <button onClick={() => handleOpenInvModal(inv)} className="text-slate-300 hover:text-emerald-500 p-1"><Edit2 className="w-3.5 h-3.5" /></button>
+                           <button onClick={() => deleteInvestment(inv.id)} className="text-slate-300 hover:text-rose-500 p-1"><Trash2 className="w-3.5 h-3.5" /></button>
+                        </div>
                      </div>
                   </div>
                 ))}
@@ -254,13 +310,12 @@ export const Investments: React.FC = () => {
         </div>
       </div>
 
-      {/* Modais */}
       {showInvModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowInvModal(false)} />
           <div className="relative bg-white w-full max-w-md rounded-3xl shadow-2xl p-8 animate-in zoom-in duration-300">
-             <h3 className="text-xl font-bold mb-6">Novo Ativo Financeiro</h3>
-             <form onSubmit={handleAddInvestment} className="space-y-4">
+             <h3 className="text-xl font-bold mb-6">{editingInvId ? 'Editar Ativo' : 'Novo Ativo Financeiro'}</h3>
+             <form onSubmit={handleInvSubmit} className="space-y-4">
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Nome do Ativo</label>
                   <input required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald-500" value={invForm.name} onChange={e => setInvForm({...invForm, name: e.target.value})} placeholder="Ex: Tesouro Selic 2029" />
@@ -285,7 +340,9 @@ export const Investments: React.FC = () => {
                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Instituição</label>
                   <input className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald-500" value={invForm.institution} onChange={e => setInvForm({...invForm, institution: e.target.value})} placeholder="Ex: XP, NuInvest, Binance" />
                 </div>
-                <button type="submit" className="w-full py-4 bg-emerald-600 text-white font-bold rounded-2xl shadow-lg mt-4 active:scale-95 transition-all">Salvar Ativo</button>
+                <button type="submit" className="w-full py-4 bg-emerald-600 text-white font-bold rounded-2xl shadow-lg mt-4 active:scale-95 transition-all">
+                  {editingInvId ? 'Atualizar Ativo' : 'Salvar Ativo'}
+                </button>
              </form>
           </div>
         </div>
@@ -295,8 +352,8 @@ export const Investments: React.FC = () => {
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowGoalModal(false)} />
           <div className="relative bg-white w-full max-w-md rounded-3xl shadow-2xl p-8 animate-in zoom-in duration-300">
-             <h3 className="text-xl font-bold mb-6">Nova Meta Financeira</h3>
-             <form onSubmit={handleAddGoal} className="space-y-4">
+             <h3 className="text-xl font-bold mb-6">{editingGoalId ? 'Editar Meta' : 'Nova Meta Financeira'}</h3>
+             <form onSubmit={handleGoalSubmit} className="space-y-4">
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Título da Meta</label>
                   <input required className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald-500" value={goalForm.name} onChange={e => setGoalForm({...goalForm, name: e.target.value})} placeholder="Ex: Viagem à Disney" />
@@ -326,7 +383,9 @@ export const Investments: React.FC = () => {
                       ))}
                    </div>
                 </div>
-                <button type="submit" className="w-full py-4 bg-emerald-600 text-white font-bold rounded-2xl shadow-lg mt-4 active:scale-95 transition-all">Criar Meta</button>
+                <button type="submit" className="w-full py-4 bg-emerald-600 text-white font-bold rounded-2xl shadow-lg mt-4 active:scale-95 transition-all">
+                  {editingGoalId ? 'Atualizar Meta' : 'Criar Meta'}
+                </button>
              </form>
           </div>
         </div>

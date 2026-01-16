@@ -20,6 +20,7 @@ interface FinanceContextType extends FinanceState {
   updateSchedule: (id: string, s: Partial<Omit<Schedule, 'id'>>) => void;
   deleteSchedule: (id: string) => void;
   addInvestment: (i: Omit<Investment, 'id'>) => void;
+  updateInvestment: (id: string, i: Partial<Omit<Investment, 'id'>>) => void;
   deleteInvestment: (id: string) => void;
   addGoal: (g: Omit<Goal, 'id'>) => void;
   updateGoal: (id: string, g: Partial<Omit<Goal, 'id'>>) => void;
@@ -247,6 +248,13 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }));
   }, []);
 
+  const updateInvestment = useCallback((id: string, i: Partial<Omit<Investment, 'id'>>) => {
+    setState(prev => ({
+      ...prev,
+      investments: prev.investments.map(inv => inv.id === id ? { ...inv, ...i } : inv)
+    }));
+  }, []);
+
   const deleteInvestment = useCallback((id: string) => {
     setState(prev => ({
       ...prev,
@@ -296,7 +304,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       addTransaction, updateTransaction, deleteTransaction,
       addBudget, updateBudget, deleteBudget,
       addSchedule, updateSchedule, deleteSchedule,
-      addInvestment, deleteInvestment,
+      addInvestment, updateInvestment, deleteInvestment,
       addGoal, updateGoal, deleteGoal,
       refreshState, updateUserProfile, logout
     }}>
