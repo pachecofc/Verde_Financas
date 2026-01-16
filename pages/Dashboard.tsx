@@ -2,21 +2,19 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
   BarChart as ReBarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
-  PieChart as RePieChart, Pie, Cell, Legend
+  PieChart as RePieChart, Pie, Cell, Legend, AreaChart, Area, ComposedChart
 } from 'recharts';
-import { TrendingUp, TrendingDown, Wallet, Calendar } from 'lucide-react';
+import { TrendingUp, TrendingDown, Wallet, Calendar, Info } from 'lucide-react';
 import { useFinance } from '../FinanceContext';
 
 export const Dashboard: React.FC = () => {
-  const { transactions, accounts, categories } = useFinance();
+  const { transactions, accounts, categories, schedules } = useFinance();
   const [isMounted, setIsMounted] = useState(false);
 
-  // Garante que o gráfico só renderize após a montagem do componente para evitar erros de medição
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
-  // Estado para o filtro de mês (Formato: YYYY-MM)
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -31,48 +29,78 @@ export const Dashboard: React.FC = () => {
     .filter(t => t.type === 'expense')
     .reduce((acc, t) => acc + t.amount, 0);
 
-  // Dados para o gráfico de barras (Histórico Geral)
-  const chartData = useMemo(() => {
-    const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-    const aggregation: Record<string, { name: string; income: number; expense: number; sortKey: number }> = {};
-
-    transactions.forEach(t => {
-      const date = new Date(t.date + 'T00:00:00');
-      const monthIdx = date.getMonth();
-      const year = date.getFullYear();
-      const yearShort = year.toString().slice(-2);
-      const label = `${months[monthIdx]}/${yearShort}`;
-      const sortKey = year * 100 + monthIdx;
-
-      if (!aggregation[label]) {
-        aggregation[label] = { name: label, income: 0, expense: 0, sortKey };
-      }
-
-      if (t.type === 'income') {
-        aggregation[label].income += t.amount;
-      } else {
-        aggregation[label].expense += t.amount;
-      }
-    });
-
-    const sortedData = Object.values(aggregation).sort((a, b) => a.sortKey - b.sortKey);
-    return sortedData.length > 0 ? sortedData.slice(-6) : [{ name: 'Sem Dados', income: 0, expense: 0 }];
-  }, [transactions]);
-
-  // Lista de meses disponíveis para o filtro (baseado nas transações + mês atual)
-  const availableMonths = useMemo(() => {
-    const monthSet = new Set<string>();
+  // Lógica Avançada de Fluxo de Caixa (Realizado + Previsto)
+  const cashFlowData = useMemo(() => {
+    const monthsShort = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
     const now = new Date();
-    monthSet.add(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`);
-    
-    transactions.forEach(t => {
-      monthSet.add(t.date.substring(0, 7));
-    });
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth();
 
-    return Array.from(monthSet).sort().reverse();
-  }, [transactions]);
+    const data = [];
+    // Gerar range: 3 meses atrás até 2 meses à frente (Total 6 meses)
+    for (let i = -3; i <= 2; i++) {
+      const d = new Date(currentYear, currentMonth + i, 1);
+      const m = d.getMonth();
+      const y = d.getFullYear();
+      const monthKey = `${y}-${String(m + 1).padStart(2, '0')}`;
+      const isFuture = d > now || (y === currentYear && m === currentMonth);
 
-  // Gráfico de Pizza: Filtrado por Categoria e Mês Selecionado
+      let realizedIncome = 0;
+      let realizedExpense = 0;
+      let predictedIncome = 0;
+      let predictedExpense = 0;
+
+      // 1. Somar transações já realizadas
+      transactions.forEach(t => {
+        if (t.date.startsWith(monthKey)) {
+          if (t.type === 'income') realizedIncome += t.amount;
+          else if (t.type === 'expense') realizedExpense += t.amount;
+        }
+      });
+
+      // 2. Projetar agendamentos se for mês atual ou futuro
+      if (isFuture) {
+        schedules.forEach(s => {
+          const sDate = new Date(s.date + 'T00:00:00');
+          // Simplificação: se o agendamento começou antes ou neste mês
+          if (sDate <= new Date(y, m + 1, 0)) {
+            let occurrences = 0;
+            if (s.frequency === 'once') {
+              if (s.date.startsWith(monthKey)) occurrences = 1;
+            } else if (s.frequency === 'monthly') {
+              occurrences = 1;
+            } else if (s.frequency === 'weekly') {
+              occurrences = 4;
+            }
+
+            if (s.type === 'income') predictedIncome += s.amount * occurrences;
+            else if (s.type === 'expense') predictedExpense += s.amount * occurrences;
+          }
+        });
+      }
+
+      data.push({
+        name: monthsShort[m],
+        monthKey,
+        realizedIncome,
+        realizedExpense,
+        predictedIncome,
+        predictedExpense,
+        totalIncome: realizedIncome + predictedIncome,
+        totalExpense: realizedExpense + predictedExpense,
+        isFuture
+      });
+    }
+
+    // Calcular saldo acumulado simplificado para o gráfico
+    let runningBalance = totalBalance; // Começamos do saldo hoje e voltamos/avançamos
+    // Para simplificar a visualização do fluxo, vamos apenas mostrar o saldo líquido mensal no gráfico de área
+    return data.map(item => ({
+      ...item,
+      netFlow: item.totalIncome - item.totalExpense
+    }));
+  }, [transactions, schedules, totalBalance]);
+
   const expenseByCategory = useMemo(() => {
     return categories
       .filter(c => c.type === 'expense')
@@ -95,12 +123,20 @@ export const Dashboard: React.FC = () => {
     return date.toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
   };
 
+  const availableMonths = useMemo(() => {
+    const monthSet = new Set<string>();
+    const now = new Date();
+    monthSet.add(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`);
+    transactions.forEach(t => monthSet.add(t.date.substring(0, 7)));
+    return Array.from(monthSet).sort().reverse();
+  }, [transactions]);
+
   return (
     <div className="space-y-8 pb-10">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">Seu Dashboard</h1>
-          <p className="text-slate-500">Resumo geral das suas finanças baseado no histórico real.</p>
+          <p className="text-slate-500">Acompanhe seu desempenho passado e previsões futuras.</p>
         </div>
       </div>
 
@@ -111,7 +147,7 @@ export const Dashboard: React.FC = () => {
             <Wallet className="w-6 h-6" />
           </div>
           <div>
-            <p className="text-sm font-medium text-slate-500">Saldo Geral</p>
+            <p className="text-sm font-medium text-slate-500">Saldo Hoje</p>
             <h3 className="text-2xl font-bold text-slate-900">{formatCurrency(totalBalance)}</h3>
           </div>
         </div>
@@ -137,36 +173,74 @@ export const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Main Cash Flow Chart */}
-        <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-          <h3 className="text-lg font-bold text-slate-800 mb-6">Receitas vs Despesas (Histórico Mensal)</h3>
-          <div className="h-[300px] w-full min-h-[300px]">
-            {isMounted && (
-              <ResponsiveContainer width="100%" height="100%">
-                <ReBarChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} />
-                  <Tooltip 
-                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }} 
-                    cursor={{ fill: '#f8fafc' }}
-                    formatter={(value: number) => formatCurrency(value)}
-                  />
-                  <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px' }} />
-                  <Bar name="Receita" dataKey="income" fill="#10b981" radius={[4, 4, 0, 0]} />
-                  <Bar name="Despesa" dataKey="expense" fill="#f43f5e" radius={[4, 4, 0, 0]} />
-                </ReBarChart>
-              </ResponsiveContainer>
-            )}
+      {/* Fluxo de Caixa Central (Novo) */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h3 className="text-lg font-bold text-slate-800">Fluxo de Caixa: Realizado vs Previsto</h3>
+            <p className="text-xs text-slate-400">Projeção baseada em seus agendamentos recorrentes.</p>
+          </div>
+          <div className="flex gap-4 text-[10px] font-bold uppercase tracking-wider">
+            <div className="flex items-center gap-1.5"><div className="w-2 h-2 bg-emerald-500 rounded-full" /> Receita</div>
+            <div className="flex items-center gap-1.5"><div className="w-2 h-2 bg-rose-500 rounded-full" /> Despesa</div>
+            <div className="flex items-center gap-1.5"><div className="w-2 h-2 bg-slate-200 rounded-full" /> Previsto</div>
           </div>
         </div>
+        
+        <div className="h-[350px] w-full">
+          {isMounted && (
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={cashFlowData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                <XAxis 
+                  dataKey="name" 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={({ x, y, payload }) => {
+                    const item = cashFlowData[payload.index];
+                    return (
+                      <text x={x} y={y + 15} fill={item.isFuture ? '#10b981' : '#94a3b8'} fontSize={11} fontWeight={item.isFuture ? 'bold' : 'normal'} textAnchor="middle">
+                        {payload.value} {item.isFuture ? '*' : ''}
+                      </text>
+                    );
+                  }}
+                />
+                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} />
+                <Tooltip 
+                  contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', padding: '16px' }} 
+                  cursor={{ fill: '#f8fafc' }}
+                  formatter={(value: number, name: string) => [formatCurrency(value), name]}
+                />
+                <Bar name="Receita Realizada" dataKey="realizedIncome" stackId="a" fill="#10b981" radius={[0, 0, 0, 0]} />
+                <Bar name="Receita Prevista" dataKey="predictedIncome" stackId="a" fill="#10b981" opacity={0.3} radius={[4, 4, 0, 0]} />
+                
+                <Bar name="Despesa Realizada" dataKey="realizedExpense" stackId="b" fill="#f43f5e" radius={[0, 0, 0, 0]} />
+                <Bar name="Despesa Prevista" dataKey="predictedExpense" stackId="b" fill="#f43f5e" opacity={0.3} radius={[4, 4, 0, 0]} />
+                
+                <Area 
+                  name="Saldo Mensal" 
+                  type="monotone" 
+                  dataKey="netFlow" 
+                  fill="#f8fafc" 
+                  stroke="#cbd5e1" 
+                  strokeWidth={2}
+                  dot={{ fill: '#94a3b8', r: 4 }}
+                />
+              </ComposedChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+        <div className="mt-4 flex items-start gap-2 text-slate-400">
+           <Info className="w-4 h-4 mt-0.5 shrink-0" />
+           <p className="text-[10px]">Os meses marcados com (*) contêm projeções baseadas em seus lançamentos agendados na tela de Programação. O "Saldo Mensal" indica a diferença entre o que entra e o que sai em cada período.</p>
+        </div>
+      </div>
 
-        {/* Expenses by Category with Month Filter */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Distribuição de Gastos */}
         <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
             <h3 className="text-lg font-bold text-slate-800">Distribuição de Gastos</h3>
-            
             <div className="relative inline-flex items-center">
               <Calendar className="absolute left-3 w-4 h-4 text-emerald-600 pointer-events-none" />
               <select 
@@ -175,9 +249,7 @@ export const Dashboard: React.FC = () => {
                 className="pl-9 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all appearance-none cursor-pointer"
               >
                 {availableMonths.map(m => (
-                  <option key={m} value={m}>
-                    {formatMonthLabel(m)}
-                  </option>
+                  <option key={m} value={m}>{formatMonthLabel(m)}</option>
                 ))}
               </select>
             </div>
@@ -217,34 +289,40 @@ export const Dashboard: React.FC = () => {
             ) : null}
           </div>
         </div>
-      </div>
 
-      {/* Recent Activity Mini List */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-        <h3 className="text-lg font-bold text-slate-800 mb-4">Últimas Transações</h3>
-        <div className="divide-y divide-slate-50">
-          {transactions.slice(0, 5).map(t => {
-            const cat = categories.find(c => c.id === t.categoryId);
-            return (
-              <div key={t.id} className="py-4 flex items-center justify-between group hover:bg-slate-50/50 transition-all rounded-lg px-2 -mx-2">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full flex items-center justify-center bg-slate-100 text-xl border border-white shadow-sm">
-                    {cat?.icon || '📦'}
+        {/* Orçamentos Críticos */}
+        <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+           <h3 className="text-lg font-bold text-slate-800 mb-6">Alertas de Orçamento</h3>
+           <div className="space-y-6">
+              {useFinance().budgets.slice(0, 4).map(b => {
+                const cat = categories.find(c => c.id === b.categoryId);
+                const percent = Math.min((b.spent / b.limit) * 100, 100);
+                return (
+                  <div key={b.id} className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">{cat?.icon}</span>
+                        <span className="text-sm font-bold text-slate-700">{cat?.name}</span>
+                      </div>
+                      <span className={`text-xs font-bold ${percent >= 90 ? 'text-rose-600' : 'text-slate-400'}`}>
+                        {percent.toFixed(0)}%
+                      </span>
+                    </div>
+                    <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                       <div 
+                        className={`h-full transition-all duration-1000 ${percent >= 90 ? 'bg-rose-500' : 'bg-emerald-500'}`} 
+                        style={{ width: `${percent}%` }} 
+                       />
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-medium text-slate-900">{t.description}</p>
-                    <p className="text-xs text-slate-500">{new Date(t.date + 'T00:00:00').toLocaleDateString()}</p>
-                  </div>
+                );
+              })}
+              {useFinance().budgets.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-10 text-slate-400">
+                  <p className="text-sm">Nenhum orçamento definido.</p>
                 </div>
-                <div className={`font-bold ${t.type === 'income' ? 'text-emerald-600' : 'text-slate-900'}`}>
-                  {t.type === 'income' ? '+' : '-'} {formatCurrency(t.amount)}
-                </div>
-              </div>
-            );
-          })}
-          {transactions.length === 0 && (
-            <p className="text-center py-8 text-slate-400">Nenhuma transação registrada no sistema.</p>
-          )}
+              )}
+           </div>
         </div>
       </div>
     </div>
