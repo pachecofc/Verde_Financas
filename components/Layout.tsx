@@ -17,7 +17,8 @@ import {
   Check,
   Lock,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  TrendingUp
 } from 'lucide-react';
 import { useFinance } from '../FinanceContext';
 
@@ -43,6 +44,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     { name: 'Dashboard', path: '/', icon: LayoutDashboard },
     { name: 'Transações', path: '/transactions', icon: ArrowLeftRight },
     { name: 'Contas', path: '/accounts', icon: CreditCard },
+    { name: 'Investimentos', path: '/investments', icon: TrendingUp },
     { name: 'Orçamentos', path: '/budgets', icon: PieChart },
     { name: 'Programação', path: '/schedule', icon: CalendarDays },
     { name: 'Categorias', path: '/categories', icon: Tags },
@@ -70,8 +72,6 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Validação simples de senha se o usuário preencheu a nova senha
     if (profileForm.newPassword) {
       if (profileForm.newPassword !== profileForm.confirmPassword) {
         alert("A nova senha e a confirmação não coincidem!");
@@ -81,8 +81,6 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         alert("Por favor, insira sua senha atual para realizar a alteração.");
         return;
       }
-      // Aqui em um app real enviaríamos para o backend.
-      console.log("Senha alterada com sucesso!");
     }
 
     updateUserProfile({
@@ -106,7 +104,6 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden">
-      {/* Mobile Sidebar Overlay */}
       {isOpen && (
         <div 
           className="fixed inset-0 bg-black/50 z-40 md:hidden" 
@@ -114,7 +111,6 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         />
       )}
 
-      {/* Sidebar */}
       <aside className={`
         fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-200 transform transition-transform duration-300 ease-in-out
         md:relative md:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'}
@@ -158,7 +154,6 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         </div>
       </aside>
 
-      {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 shrink-0">
           <button onClick={() => setIsOpen(true)} className="md:hidden text-slate-600">
@@ -199,7 +194,6 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         </div>
       </main>
 
-      {/* Profile Modal */}
       {isProfileModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsProfileModalOpen(false)} />
@@ -259,7 +253,6 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                 </div>
               </div>
 
-              {/* Password Change Section */}
               <div className="border-t border-slate-100 pt-4 mt-2">
                 <button 
                   type="button"

@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { FinanceState, Category, Account, Transaction, Budget, Schedule, UserProfile } from './types';
+import { FinanceState, Category, Account, Transaction, Budget, Schedule, UserProfile, Investment, Goal } from './types';
 import { INITIAL_CATEGORIES, INITIAL_ACCOUNTS } from './constants';
 
 interface FinanceContextType extends FinanceState {
@@ -19,6 +19,11 @@ interface FinanceContextType extends FinanceState {
   addSchedule: (s: Omit<Schedule, 'id'>) => void;
   updateSchedule: (id: string, s: Partial<Omit<Schedule, 'id'>>) => void;
   deleteSchedule: (id: string) => void;
+  addInvestment: (i: Omit<Investment, 'id'>) => void;
+  deleteInvestment: (id: string) => void;
+  addGoal: (g: Omit<Goal, 'id'>) => void;
+  updateGoal: (id: string, g: Partial<Omit<Goal, 'id'>>) => void;
+  deleteGoal: (id: string) => void;
   refreshState: () => void;
   updateUserProfile: (u: UserProfile) => void;
   logout: () => void;
@@ -36,6 +41,8 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       transactions: [],
       budgets: [],
       schedules: [],
+      investments: [],
+      goals: [],
       user: null,
     };
   });
@@ -126,7 +133,6 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const oldTr = prev.transactions.find(t => t.id === id);
       if (!oldTr) return prev;
 
-      // Reverse old effect
       let revertedAccounts = prev.accounts.map(acc => {
         if (oldTr.type === 'transfer') {
           if (acc.id === oldTr.accountId) return { ...acc, balance: acc.balance + oldTr.amount };
@@ -143,13 +149,12 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
       const finalTr = { ...oldTr, ...updatedData };
 
-      // Apply new effect
       const finalAccounts = revertedAccounts.map(acc => {
         if (finalTr.type === 'transfer') {
           if (acc.id === finalTr.accountId) return { ...acc, balance: acc.balance - finalTr.amount };
           if (acc.id === finalTr.toAccountId) return { ...acc, balance: acc.balance + finalTr.amount };
         } else if (finalTr.type === 'adjustment') {
-          if (acc.id === finalTr.accountId) return { ...acc, balance: acc.balance + finalTr.amount };
+          if (acc.id === finalTr.accountId) return { ...acc, balance: finalTr.amount };
         } else {
           if (acc.id === finalTr.accountId) {
             return { ...acc, balance: acc.balance + (finalTr.type === 'income' ? finalTr.amount : -finalTr.amount) };
@@ -235,6 +240,41 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }));
   }, []);
 
+  const addInvestment = useCallback((i: Omit<Investment, 'id'>) => {
+    setState(prev => ({
+      ...prev,
+      investments: [...prev.investments, { ...i, id: `inv-${Date.now()}` }]
+    }));
+  }, []);
+
+  const deleteInvestment = useCallback((id: string) => {
+    setState(prev => ({
+      ...prev,
+      investments: prev.investments.filter(i => i.id !== id)
+    }));
+  }, []);
+
+  const addGoal = useCallback((g: Omit<Goal, 'id'>) => {
+    setState(prev => ({
+      ...prev,
+      goals: [...prev.goals, { ...g, id: `goal-${Date.now()}` }]
+    }));
+  }, []);
+
+  const updateGoal = useCallback((id: string, g: Partial<Omit<Goal, 'id'>>) => {
+    setState(prev => ({
+      ...prev,
+      goals: prev.goals.map(goal => goal.id === id ? { ...goal, ...g } : goal)
+    }));
+  }, []);
+
+  const deleteGoal = useCallback((id: string) => {
+    setState(prev => ({
+      ...prev,
+      goals: prev.goals.filter(g => g.id !== id)
+    }));
+  }, []);
+
   const refreshState = useCallback(() => {
     setState(prev => {
       const updatedBudgets = prev.budgets.map(budget => {
@@ -256,6 +296,8 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       addTransaction, updateTransaction, deleteTransaction,
       addBudget, updateBudget, deleteBudget,
       addSchedule, updateSchedule, deleteSchedule,
+      addInvestment, deleteInvestment,
+      addGoal, updateGoal, deleteGoal,
       refreshState, updateUserProfile, logout
     }}>
       {children}

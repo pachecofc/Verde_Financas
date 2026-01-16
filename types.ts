@@ -7,7 +7,7 @@ export interface Category {
   type: 'income' | 'expense';
   icon: string;
   color: string;
-  parentId?: string; // ID da categoria pai
+  parentId?: string;
 }
 
 export interface Account {
@@ -25,7 +25,7 @@ export interface Transaction {
   date: string;
   categoryId: string;
   accountId: string;
-  toAccountId?: string; // Para transferências
+  toAccountId?: string;
   type: TransactionType;
 }
 
@@ -44,8 +44,27 @@ export interface Schedule {
   frequency: 'once' | 'monthly' | 'weekly';
   categoryId: string;
   accountId: string;
-  toAccountId?: string; // Para transferências programadas
+  toAccountId?: string;
   type: TransactionType;
+}
+
+export interface Investment {
+  id: string;
+  name: string;
+  type: 'fixed' | 'stocks' | 'crypto' | 'fii' | 'other';
+  amount: number;
+  institution: string;
+  color: string;
+}
+
+export interface Goal {
+  id: string;
+  name: string;
+  targetAmount: number;
+  currentAmount: number;
+  deadline?: string;
+  icon: string;
+  color: string;
 }
 
 export interface UserProfile {
@@ -60,5 +79,7 @@ export interface FinanceState {
   transactions: Transaction[];
   budgets: Budget[];
   schedules: Schedule[];
+  investments: Investment[];
+  goals: Goal[];
   user: UserProfile | null;
 }

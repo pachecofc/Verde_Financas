@@ -9,6 +9,7 @@ import { Accounts } from './pages/Accounts';
 import { Budgets } from './pages/Budgets';
 import { Schedule } from './pages/Schedule';
 import { Categories } from './pages/Categories';
+import { Investments } from './pages/Investments';
 import { Login } from './pages/Login';
 
 const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -31,6 +32,7 @@ const App: React.FC = () => {
           <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
           <Route path="/transactions" element={<PrivateRoute><Transactions /></PrivateRoute>} />
           <Route path="/accounts" element={<PrivateRoute><Accounts /></PrivateRoute>} />
+          <Route path="/investments" element={<PrivateRoute><Investments /></PrivateRoute>} />
           <Route path="/budgets" element={<PrivateRoute><Budgets /></PrivateRoute>} />
           <Route path="/schedule" element={<PrivateRoute><Schedule /></PrivateRoute>} />
           <Route path="/categories" element={<PrivateRoute><Categories /></PrivateRoute>} />
