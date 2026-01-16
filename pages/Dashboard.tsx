@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   BarChart as ReBarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   PieChart as RePieChart, Pie, Cell, Legend
@@ -9,6 +9,12 @@ import { useFinance } from '../FinanceContext';
 
 export const Dashboard: React.FC = () => {
   const { transactions, accounts, categories } = useFinance();
+  const [isMounted, setIsMounted] = useState(false);
+
+  // Garante que o gráfico só renderize após a montagem do componente para evitar erros de medição
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   // Estado para o filtro de mês (Formato: YYYY-MM)
   const [selectedMonth, setSelectedMonth] = useState(() => {
@@ -133,29 +139,31 @@ export const Dashboard: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Main Cash Flow Chart */}
-        <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm min-h-[400px]">
+        <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
           <h3 className="text-lg font-bold text-slate-800 mb-6">Receitas vs Despesas (Histórico Mensal)</h3>
-          <div className="h-[300px] w-full">
-            <ResponsiveContainer width="100%" height="100%" minHeight={300}>
-              <ReBarChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} />
-                <Tooltip 
-                  contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }} 
-                  cursor={{ fill: '#f8fafc' }}
-                  formatter={(value: number) => formatCurrency(value)}
-                />
-                <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px' }} />
-                <Bar name="Receita" dataKey="income" fill="#10b981" radius={[4, 4, 0, 0]} />
-                <Bar name="Despesa" dataKey="expense" fill="#f43f5e" radius={[4, 4, 0, 0]} />
-              </ReBarChart>
-            </ResponsiveContainer>
+          <div className="h-[300px] w-full min-h-[300px]">
+            {isMounted && (
+              <ResponsiveContainer width="100%" height="100%">
+                <ReBarChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 11 }} />
+                  <Tooltip 
+                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }} 
+                    cursor={{ fill: '#f8fafc' }}
+                    formatter={(value: number) => formatCurrency(value)}
+                  />
+                  <Legend iconType="circle" wrapperStyle={{ paddingTop: '20px' }} />
+                  <Bar name="Receita" dataKey="income" fill="#10b981" radius={[4, 4, 0, 0]} />
+                  <Bar name="Despesa" dataKey="expense" fill="#f43f5e" radius={[4, 4, 0, 0]} />
+                </ReBarChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
 
         {/* Expenses by Category with Month Filter */}
-        <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm min-h-[400px]">
+        <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
             <h3 className="text-lg font-bold text-slate-800">Distribuição de Gastos</h3>
             
@@ -175,9 +183,9 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
 
-          <div className="h-[300px] w-full">
-            {expenseByCategory.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%" minHeight={300}>
+          <div className="h-[300px] w-full min-h-[300px]">
+            {isMounted && expenseByCategory.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
                 <RePieChart>
                   <Pie
                     data={expenseByCategory}
@@ -199,14 +207,14 @@ export const Dashboard: React.FC = () => {
                   <Legend verticalAlign="bottom" height={36} />
                 </RePieChart>
               </ResponsiveContainer>
-            ) : (
+            ) : isMounted ? (
               <div className="h-full flex flex-col items-center justify-center text-slate-400 space-y-2">
                 <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center">
                    <TrendingDown className="w-8 h-8 opacity-20" />
                 </div>
                 <p className="text-sm">Nenhuma despesa para este mês.</p>
               </div>
-            )}
+            ) : null}
           </div>
         </div>
       </div>
