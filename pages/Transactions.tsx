@@ -78,7 +78,6 @@ export const Transactions: React.FC = () => {
         return;
       }
 
-      // Tenta detectar o separador (vírgula ou ponto e vírgula)
       const firstLine = lines[0];
       const separator = firstLine.includes(';') ? ';' : ',';
       
@@ -89,8 +88,20 @@ export const Transactions: React.FC = () => {
       setCsvRawRows(rows);
       setImportStep('mapping');
       
-      // Auto-detectar colunas via IA ou Heurística simples
-      detectColumns(headers, rows.slice(0, 2));
+      // Se for Premium, dispara a detecção automática
+      if (user?.plan === 'premium') {
+        detectColumns(headers, rows.slice(0, 2));
+      } else {
+        // Se for Basic, tenta uma heurística simples apenas para não deixar vazio se encontrar nomes óbvios
+        const findHeader = (keywords: string[]) => 
+          headers.find(h => keywords.some(k => h.toLowerCase().includes(k))) || '';
+        
+        setColumnMapping({
+          date: findHeader(['data', 'date']),
+          description: findHeader(['desc', 'hist']),
+          amount: findHeader(['valor', 'val', 'quant', 'amount'])
+        });
+      }
     };
     reader.readAsText(file);
   };
@@ -129,15 +140,7 @@ export const Transactions: React.FC = () => {
         amount: mapping.amount || ''
       });
     } catch (err) {
-      // Fallback para nomes comuns se a IA falhar
-      const findHeader = (keywords: string[]) => 
-        headers.find(h => keywords.some(k => h.toLowerCase().includes(k))) || '';
-      
-      setColumnMapping({
-        date: findHeader(['data', 'date', 'quando']),
-        description: findHeader(['desc', 'hist', 'item', 'nome', 'detalhe']),
-        amount: findHeader(['valor', 'quant', 'amount', 'preco', 'total'])
-      });
+      console.error("Erro na detecção de colunas:", err);
     } finally {
       setIsDetectingColumns(false);
     }
@@ -500,20 +503,44 @@ export const Transactions: React.FC = () => {
                  </div>
                )}
 
-               {/* ETAPA 2: MAPEAMENTO INTELIGENTE */}
+               {/* ETAPA 2: MAPEAMENTO INTELIGENTE / MANUAL */}
                {importStep === 'mapping' && (
-                 <div className="max-w-2xl mx-auto space-y-8 animate-in slide-in-from-bottom-4 duration-500">
-                    <div className="bg-emerald-50 dark:bg-emerald-900/20 p-6 rounded-3xl border border-emerald-100 dark:border-emerald-800/50 flex gap-5">
-                       <div className="w-12 h-12 bg-emerald-600 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-lg shadow-emerald-200 dark:shadow-none">
-                          <BrainCircuit className="w-6 h-6" />
-                       </div>
-                       <div>
-                          <p className="font-bold text-emerald-900 dark:text-emerald-200">Mapeamento Assistido por IA</p>
-                          <p className="text-sm text-emerald-700/80 dark:text-emerald-400/80 mt-1">
-                            {isDetectingColumns ? "O Gemini está analisando seu cabeçalho e amostras..." : "Detectamos as colunas abaixo. Verifique se o mapeamento está correto."}
-                          </p>
-                       </div>
-                    </div>
+                 <div className="max-w-3xl mx-auto space-y-8 animate-in slide-in-from-bottom-4 duration-500">
+                    
+                    {/* Banner Informativo PRO / Basic */}
+                    {user?.plan === 'premium' ? (
+                      <div className="bg-emerald-50 dark:bg-emerald-900/20 p-6 rounded-3xl border border-emerald-100 dark:border-emerald-800/50 flex gap-5">
+                        <div className="w-12 h-12 bg-emerald-600 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-lg shadow-emerald-200 dark:shadow-none animate-pulse">
+                            <BrainCircuit className="w-6 h-6" />
+                        </div>
+                        <div>
+                            <p className="font-bold text-emerald-900 dark:text-emerald-200">Mapeamento Inteligente PRO Ativo</p>
+                            <p className="text-sm text-emerald-700/80 dark:text-emerald-400/80 mt-1">
+                              {isDetectingColumns ? "O Gemini está analisando seus dados..." : "Suas colunas foram identificadas automaticamente. Verifique se está tudo correto."}
+                            </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-3xl border border-blue-100 dark:border-blue-800/50 flex flex-col sm:flex-row items-center gap-5 justify-between">
+                        <div className="flex gap-4">
+                          <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white shrink-0 shadow-lg shadow-blue-200 dark:shadow-none">
+                              <Crown className="w-6 h-6" />
+                          </div>
+                          <div>
+                              <p className="font-bold text-blue-900 dark:text-blue-200">Mapeamento Manual (Plano Básico)</p>
+                              <p className="text-xs text-blue-700/80 dark:text-blue-400/80 mt-1">
+                                Membros PRO têm suas colunas mapeadas instantaneamente por IA.
+                              </p>
+                          </div>
+                        </div>
+                        <button 
+                          onClick={() => setShowUpgradeModal(true)}
+                          className="px-4 py-2 bg-blue-600 text-white text-[10px] font-black uppercase rounded-xl hover:bg-blue-700 transition-all flex items-center gap-1.5"
+                        >
+                          Tentar IA <Sparkles className="w-3 h-3" />
+                        </button>
+                      </div>
+                    )}
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                        <div className="space-y-6">
@@ -544,15 +571,15 @@ export const Transactions: React.FC = () => {
                        </div>
                        
                        <div className="space-y-6">
-                          <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">Prévia dos Dados <Search className="w-3 h-3" /></h4>
+                          <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">Amostra do CSV <Search className="w-3 h-3" /></h4>
                           <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden">
                              <div className="p-4 border-b border-slate-100 dark:border-slate-700 bg-slate-100/50 dark:bg-slate-900/50">
-                                <p className="text-[10px] font-black text-slate-400 uppercase">Cabeçalhos Identificados</p>
+                                <p className="text-[10px] font-black text-slate-400 uppercase">Valores Encontrados</p>
                              </div>
                              <div className="p-4 max-h-[300px] overflow-y-auto space-y-2">
                                 {csvHeaders.map((h, i) => (
                                   <div key={i} className="flex items-center justify-between text-[11px] p-2 bg-white dark:bg-slate-900 rounded-lg border border-slate-100 dark:border-slate-800 shadow-sm">
-                                     <span className="font-bold text-slate-500 truncate">{h}</span>
+                                     <span className="font-bold text-slate-500 truncate pr-2">{h}</span>
                                      <span className="text-slate-400 italic">Ex: {csvRawRows[0]?.[i] || '---'}</span>
                                   </div>
                                 ))}
@@ -598,7 +625,7 @@ export const Transactions: React.FC = () => {
                              Categorização Mágica PRO
                              {user?.plan === 'basic' && <div className="absolute -top-2 -right-2 bg-amber-400 text-amber-900 rounded-full p-1 shadow-sm"><Crown className="w-3.5 h-3.5" /></div>}
                           </button>
-                          <button onClick={() => setImportStep('mapping')} className="p-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl text-slate-400 hover:text-emerald-600 transition-all shadow-sm"><Settings2 className="w-6 h-6" /></button>
+                          <button onClick={() => setImportStep('mapping')} className="p-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl text-slate-400 hover:text-emerald-600 transition-all shadow-sm" title="Ajustar Mapeamento"><Settings2 className="w-6 h-6" /></button>
                        </div>
                     </div>
 
