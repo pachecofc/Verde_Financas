@@ -19,11 +19,14 @@ export const Login: React.FC = () => {
 
   const handleAuth = (e: React.FormEvent) => {
     e.preventDefault();
+    // Fix: Add missing score and achievements properties to match UserProfile type
     updateUserProfile({
       name: formData.name || (formData.email.split('@')[0]),
       email: formData.email,
       avatar: undefined,
-      plan: formData.plan
+      plan: formData.plan,
+      score: 450,
+      achievements: []
     });
     navigate('/');
   };

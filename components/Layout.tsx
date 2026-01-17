@@ -4,7 +4,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, ArrowLeftRight, PieChart, CalendarDays, Settings, CreditCard, LogOut,
   Menu, X, Tags, Camera, User as UserIcon, Check, Lock, ChevronDown, ChevronUp, TrendingUp,
-  Moon, Sun, Crown, Shield, Eye, EyeOff, Sparkles, BrainCircuit
+  Moon, Sun, Crown, Shield, Eye, EyeOff, Sparkles, BrainCircuit, HeartPulse
 } from 'lucide-react';
 import { useFinance } from '../FinanceContext';
 import { UserPlan } from '../types';
@@ -15,7 +15,6 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   const [isAiOpen, setIsAiOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [showPasswordSection, setShowPasswordSection] = useState(false);
-  const [showPass, setShowPass] = useState(false);
   
   const { user, theme, toggleTheme, updateUserProfile, logout: contextLogout } = useFinance();
   const location = useLocation();
@@ -36,6 +35,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     { name: 'Dashboard', path: '/', icon: LayoutDashboard },
     { name: 'Transações', path: '/transactions', icon: ArrowLeftRight },
     { name: 'Contas', path: '/accounts', icon: CreditCard },
+    { name: 'Saúde Financeira', path: '/health', icon: HeartPulse },
     { name: 'Investimentos', path: '/investments', icon: TrendingUp },
     { name: 'Orçamentos', path: '/budgets', icon: PieChart },
     { name: 'Programação', path: '/schedule', icon: CalendarDays },
@@ -59,18 +59,13 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       newPassword: '',
       confirmPassword: ''
     });
-    setShowPasswordSection(false);
     setIsProfileModalOpen(true);
   };
 
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
-    if (showPasswordSection && profileForm.newPassword !== profileForm.confirmPassword) {
-      alert("As senhas não coincidem!");
-      return;
-    }
-    
     updateUserProfile({
+      ...user!,
       name: profileForm.name,
       email: profileForm.email,
       avatar: profileForm.avatar,
@@ -98,9 +93,9 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
             <div className="w-10 h-10 bg-emerald-600 dark:bg-emerald-500 rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg">V</div>
             <span className="text-xl font-bold text-slate-800 dark:text-slate-100 tracking-tight">Verde<span className="text-emerald-600 dark:text-emerald-400">Finanças</span></span>
           </div>
-          <nav className="flex-1 px-4 space-y-1 mt-4">
+          <nav className="flex-1 px-4 space-y-1 mt-4 overflow-y-auto">
             {menuItems.map((item) => (
-              <Link key={item.path} to={item.path} onClick={() => setIsOpen(false)} className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${isActive(item.path) ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-semibold' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
+              <Link key={item.path} to={item.path} onClick={() => setIsOpen(false)} className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${isActive(item.path) ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-bold' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>
                 <item.icon className={`w-5 h-5 ${isActive(item.path) ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'}`} />
                 {item.name}
               </Link>
@@ -119,15 +114,17 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       </aside>
 
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
-        <header className="h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-6 shrink-0 transition-colors">
+        <header className="h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-6 shrink-0 z-30 transition-colors">
           <button onClick={() => setIsOpen(true)} className="md:hidden text-slate-600 dark:text-slate-300"><Menu className="w-6 h-6" /></button>
           <div className="flex items-center gap-4 ml-auto cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 p-2 rounded-xl transition-all group" onClick={handleAvatarClick}>
             <div className="text-right hidden sm:block">
               <div className="flex items-center justify-end gap-1.5">
-                 {user?.plan === 'premium' && <Crown className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />}
                  <p className="text-sm font-bold text-slate-900 dark:text-slate-100 leading-tight">{user?.name || 'Visitante'}</p>
               </div>
-              <p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">{user?.plan === 'premium' ? 'Membro Premium' : 'Plano Básico'}</p>
+              <div className="flex items-center justify-end gap-1 mt-0.5">
+                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                 <p className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">{user?.score} Score</p>
+              </div>
             </div>
             <div className="relative">
                {user?.avatar ? (
@@ -154,7 +151,6 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           </div>
         </button>
 
-        {/* AI Assistant Drawer */}
         <AiAssistant isOpen={isAiOpen} onClose={() => setIsAiOpen(false)} />
       </main>
 
@@ -194,43 +190,6 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                     <option value="premium">Plano PRO (Premium)</option>
                   </select>
                 </div>
-              </div>
-
-              <div className="border border-slate-100 dark:border-slate-800 rounded-2xl overflow-hidden bg-white dark:bg-slate-900 shadow-sm">
-                 <button 
-                  type="button"
-                  onClick={() => setShowPasswordSection(!showPasswordSection)}
-                  className="w-full p-4 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-                 >
-                    <div className="flex items-center gap-3">
-                      <Lock className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                      <span className="text-xs font-black uppercase tracking-widest text-slate-700 dark:text-slate-300">Alterar Minha Senha</span>
-                    </div>
-                    {showPasswordSection ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                 </button>
-                 
-                 {showPasswordSection && (
-                   <div className="p-4 pt-0 space-y-3 animate-in slide-in-from-top-2 duration-300">
-                      <input 
-                        type="password" placeholder="Senha atual"
-                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:border-emerald-500"
-                        value={profileForm.currentPassword}
-                        onChange={e => setProfileForm({...profileForm, currentPassword: e.target.value})}
-                      />
-                      <input 
-                        type="password" placeholder="Nova senha"
-                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:border-emerald-500"
-                        value={profileForm.newPassword}
-                        onChange={e => setProfileForm({...profileForm, newPassword: e.target.value})}
-                      />
-                      <input 
-                        type="password" placeholder="Confirmar nova senha"
-                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:border-emerald-500"
-                        value={profileForm.confirmPassword}
-                        onChange={e => setProfileForm({...profileForm, confirmPassword: e.target.value})}
-                      />
-                   </div>
-                 )}
               </div>
 
               <button type="submit" className="w-full py-5 bg-emerald-600 dark:bg-emerald-500 hover:bg-emerald-700 dark:hover:bg-emerald-400 text-white font-black rounded-2xl shadow-xl shadow-emerald-100 dark:shadow-none transition-all active:scale-[0.98] mt-4">

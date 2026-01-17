@@ -69,11 +69,22 @@ export interface Goal {
   color: string;
 }
 
+export interface Achievement {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  unlockedAt?: string;
+  requirement: string;
+}
+
 export interface UserProfile {
   name: string;
   email: string;
   avatar?: string;
   plan: UserPlan;
+  score: number;
+  achievements: Achievement[];
 }
 
 export interface FinanceState {

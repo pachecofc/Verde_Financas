@@ -10,6 +10,7 @@ import { Budgets } from './pages/Budgets';
 import { Schedule } from './pages/Schedule';
 import { Categories } from './pages/Categories';
 import { Investments } from './pages/Investments';
+import { Gamification } from './pages/Gamification';
 import { Login } from './pages/Login';
 
 const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -36,6 +37,7 @@ const App: React.FC = () => {
           <Route path="/budgets" element={<PrivateRoute><Budgets /></PrivateRoute>} />
           <Route path="/schedule" element={<PrivateRoute><Schedule /></PrivateRoute>} />
           <Route path="/categories" element={<PrivateRoute><Categories /></PrivateRoute>} />
+          <Route path="/health" element={<PrivateRoute><Gamification /></PrivateRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Router>
