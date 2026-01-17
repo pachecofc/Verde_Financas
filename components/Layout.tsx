@@ -4,13 +4,15 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, ArrowLeftRight, PieChart, CalendarDays, Settings, CreditCard, LogOut,
   Menu, X, Tags, Camera, User as UserIcon, Check, Lock, ChevronDown, ChevronUp, TrendingUp,
-  Moon, Sun, Crown, Shield, Eye, EyeOff
+  Moon, Sun, Crown, Shield, Eye, EyeOff, Sparkles, BrainCircuit
 } from 'lucide-react';
 import { useFinance } from '../FinanceContext';
 import { UserPlan } from '../types';
+import { AiAssistant } from './AiAssistant';
 
 export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [isAiOpen, setIsAiOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [showPasswordSection, setShowPasswordSection] = useState(false);
   const [showPass, setShowPass] = useState(false);
@@ -116,7 +118,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         </div>
       </aside>
 
-      <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
         <header className="h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-6 shrink-0 transition-colors">
           <button onClick={() => setIsOpen(true)} className="md:hidden text-slate-600 dark:text-slate-300"><Menu className="w-6 h-6" /></button>
           <div className="flex items-center gap-4 ml-auto cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 p-2 rounded-xl transition-all group" onClick={handleAvatarClick}>
@@ -139,6 +141,21 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         <div className="flex-1 overflow-y-auto p-4 md:p-8">
           <div className="max-w-6xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">{children}</div>
         </div>
+
+        {/* Floating AI Button */}
+        <button 
+          onClick={() => setIsAiOpen(true)}
+          className="fixed bottom-8 right-8 w-14 h-14 bg-emerald-600 dark:bg-emerald-500 text-white rounded-2xl shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all group z-40"
+          title="Assistente Financeiro IA"
+        >
+          <BrainCircuit className="w-7 h-7 group-hover:rotate-12 transition-transform" />
+          <div className="absolute -top-1 -right-1 w-4 h-4 bg-amber-400 rounded-full flex items-center justify-center">
+            <Sparkles className="w-2.5 h-2.5 text-amber-900" />
+          </div>
+        </button>
+
+        {/* AI Assistant Drawer */}
+        <AiAssistant isOpen={isAiOpen} onClose={() => setIsAiOpen(false)} />
       </main>
 
       {isProfileModalOpen && (
