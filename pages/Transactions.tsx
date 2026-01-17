@@ -3,42 +3,31 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useFinance } from '../FinanceContext';
 import { 
   Plus, Search, Trash2, Edit2, ArrowRightLeft, SlidersHorizontal, 
-  ChevronRight, Filter, X, Calendar, Upload, FileText, Check, AlertCircle, ChevronLeft
+  ChevronRight, Filter, X, Calendar, Upload, FileText, Check, AlertCircle, 
+  ChevronLeft, Camera, RefreshCw, Sparkles, Loader2
 } from 'lucide-react';
 import { TransactionType, Transaction, Category } from '../types';
+import { GoogleGenAI, Type } from "@google/genai";
 
 export const Transactions: React.FC = () => {
-  const { transactions, categories, accounts, addTransaction, updateTransaction, deleteTransaction } = useFinance();
+  const { transactions, categories, accounts, addTransaction, updateTransaction, deleteTransaction, theme } = useFinance();
   const [showModal, setShowModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [showScanner, setShowScanner] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  // States para Importação
-  const [importStep, setImportStep] = useState(1);
-  const [isDragging, setIsDragging] = useState(false);
-  const [rawCsvText, setRawCsvText] = useState('');
-  const [csvRawData, setCsvRawData] = useState<string[][]>([]);
-  const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
-  const [mapping, setMapping] = useState({
-    date: -1,
-    description: -1,
-    amount: -1,
-    separator: ';',
-    accountId: ''
-  });
-  const [importPreview, setImportPreview] = useState<any[]>([]);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  // Câmera
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [stream, setStream] = useState<MediaStream | null>(null);
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment');
 
-  // States para Filtros
-  const [filters, setFilters] = useState({
-    startDate: '',
-    endDate: '',
-    categoryId: '',
-    accountId: '',
-  });
+  // Filtros e Importação
+  const [filters, setFilters] = useState({ startDate: '', endDate: '', categoryId: '', accountId: '' });
 
-  // Form State para Modal de Cadastro Manual
+  // Form State
   const [formData, setFormData] = useState({
     description: '',
     amount: '',
@@ -50,8 +39,20 @@ export const Transactions: React.FC = () => {
     type: 'expense' as TransactionType,
   });
 
+  // Efeito fundamental para corrigir a "tela preta":
+  // Anexa o stream ao vídeo somente quando o modal (e o elemento video) estiverem prontos no DOM.
   useEffect(() => {
-    if (showModal && !editingId) {
+    if (showScanner && stream && videoRef.current) {
+      const video = videoRef.current;
+      video.srcObject = stream;
+      video.onloadedmetadata = () => {
+        video.play().catch(e => console.error("Erro ao iniciar autoplay:", e));
+      };
+    }
+  }, [showScanner, stream]);
+
+  useEffect(() => {
+    if (showModal && !editingId && !formData.description) {
       const firstExpenseCat = categories.find(c => c.type === 'expense')?.id || '';
       const firstAccount = accounts[0]?.id || '';
       setFormData(prev => ({
@@ -62,6 +63,123 @@ export const Transactions: React.FC = () => {
       }));
     }
   }, [showModal, editingId, categories, accounts]);
+
+  // --- Lógica do Scanner OCR ---
+  
+  const getInitialFacingMode = () => {
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    return isMobile ? 'environment' : 'user';
+  };
+
+  const startCamera = async (mode?: 'user' | 'environment') => {
+    // Para o stream anterior se existir para liberar a câmera
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+    }
+
+    const modeToUse = mode || getInitialFacingMode();
+    setFacingMode(modeToUse);
+
+    try {
+      const mediaStream = await navigator.mediaDevices.getUserMedia({ 
+        video: { 
+          facingMode: modeToUse, 
+          width: { ideal: 1280 }, 
+          height: { ideal: 720 } 
+        } 
+      });
+      setStream(mediaStream);
+      setShowScanner(true); // Isso monta o elemento <video> no DOM
+    } catch (err) {
+      if (!mode) {
+        startCamera(modeToUse === 'environment' ? 'user' : 'environment');
+      } else {
+        alert("Não foi possível acessar a câmera. Verifique se o site tem permissão e se nenhuma outra aba está usando a câmera.");
+        console.error(err);
+      }
+    }
+  };
+
+  const stopCamera = () => {
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+      setStream(null);
+    }
+    setShowScanner(false);
+  };
+
+  const toggleCamera = () => {
+    const newMode = facingMode === 'user' ? 'environment' : 'user';
+    startCamera(newMode);
+  };
+
+  const captureAndScan = async () => {
+    if (!videoRef.current || !canvasRef.current) return;
+    
+    setIsScanning(true);
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    
+    if (facingMode === 'user') {
+      ctx?.translate(canvas.width, 0);
+      ctx?.scale(-1, 1);
+    }
+    
+    ctx?.drawImage(video, 0, 0);
+
+    const base64Image = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+    
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: {
+          parts: [
+            { inlineData: { mimeType: 'image/jpeg', data: base64Image } },
+            { text: "Extraia os dados deste cupom fiscal. Retorne um JSON com: 'estabelecimento', 'data' (YYYY-MM-DD), 'valor_total' (number) e uma string curta 'resumo_itens' listando os principais itens." }
+          ]
+        },
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              estabelecimento: { type: Type.STRING },
+              data: { type: Type.STRING },
+              valor_total: { type: Type.NUMBER },
+              resumo_itens: { type: Type.STRING }
+            },
+            required: ["estabelecimento", "data", "valor_total"]
+          }
+        }
+      });
+
+      const data = JSON.parse(response.text);
+      
+      setFormData({
+        description: `${data.estabelecimento}${data.resumo_itens ? ' (' + data.resumo_itens + ')' : ''}`,
+        amount: data.valor_total.toString(),
+        targetBalance: '',
+        date: data.data || new Date().toISOString().split('T')[0],
+        categoryId: categories.find(c => c.type === 'expense')?.id || '',
+        accountId: accounts[0]?.id || '',
+        toAccountId: '',
+        type: 'expense'
+      });
+
+      stopCamera();
+      setShowModal(true);
+    } catch (err) {
+      alert("Erro ao ler a nota. Certifique-se de que a foto está nítida e bem iluminada.");
+      console.error(err);
+    } finally {
+      setIsScanning(false);
+    }
+  };
 
   const handleTypeChange = (newType: TransactionType) => {
     const firstCatOfType = (newType === 'income' || newType === 'expense') 
@@ -94,18 +212,13 @@ export const Transactions: React.FC = () => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     let finalAmount = parseFloat(formData.amount);
-
     if (formData.type === 'adjustment') {
       const account = accounts.find(a => a.id === formData.accountId);
       if (account) finalAmount = parseFloat(formData.targetBalance) - account.balance;
     }
-
-    const finalCategoryId = (formData.type === 'transfer' || formData.type === 'adjustment')
-      ? `sys-${formData.type}`
-      : formData.categoryId;
-
+    const finalCategoryId = (formData.type === 'transfer' || formData.type === 'adjustment') ? `sys-${formData.type}` : formData.categoryId;
     const transactionData = {
-      description: formData.description || (formData.type === 'transfer' ? 'Transferência' : formData.type === 'adjustment' ? 'Ajuste de Saldo' : ''),
+      description: formData.description,
       amount: finalAmount,
       date: formData.date,
       categoryId: finalCategoryId,
@@ -113,12 +226,8 @@ export const Transactions: React.FC = () => {
       toAccountId: formData.type === 'transfer' ? formData.toAccountId : undefined,
       type: formData.type,
     };
-
-    if (editingId) {
-      updateTransaction(editingId, transactionData);
-    } else {
-      addTransaction(transactionData);
-    }
+    if (editingId) updateTransaction(editingId, transactionData);
+    else addTransaction(transactionData);
     handleCloseModal();
   };
 
@@ -130,134 +239,6 @@ export const Transactions: React.FC = () => {
       date: new Date().toISOString().split('T')[0],
       categoryId: '', accountId: '', toAccountId: '', type: 'expense',
     });
-  };
-
-  // --- Lógica de Importação CSV ---
-  const readFile = (file: File) => {
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const text = event.target?.result as string;
-      setRawCsvText(text);
-      processCsvText(text, mapping.separator);
-    };
-    reader.readAsText(file);
-  };
-
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) readFile(file);
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-    
-    const file = e.dataTransfer.files?.[0];
-    if (file && file.type === "text/csv" || file.name.endsWith('.csv')) {
-      readFile(file);
-    } else {
-      alert("Por favor, arraste um arquivo no formato CSV.");
-    }
-  };
-
-  const processCsvText = (text: string, sep: string) => {
-    const lines = text.split(/\r?\n/).filter(line => line.trim());
-    if (lines.length === 0) return;
-    
-    const rows = lines.map(line => line.split(sep).map(cell => cell.trim().replace(/^"|"$/g, '')));
-    setCsvHeaders(rows[0]);
-    setCsvRawData(rows.slice(1));
-    setMapping(prev => ({ 
-      ...prev, 
-      accountId: prev.accountId || (accounts[0]?.id || ''),
-      date: -1, description: -1, amount: -1
-    }));
-    setImportStep(2);
-  };
-
-  const parseValue = (val: string): number => {
-    let clean = val.replace(/[R$\s]/g, '');
-    if (!clean) return 0;
-
-    const lastComma = clean.lastIndexOf(',');
-    const lastDot = clean.lastIndexOf('.');
-
-    if (lastComma > lastDot) {
-      return parseFloat(clean.replace(/\./g, '').replace(',', '.'));
-    } else if (lastDot > lastComma) {
-      return parseFloat(clean.replace(/,/g, ''));
-    } else {
-      if (lastComma !== -1) return parseFloat(clean.replace(',', '.'));
-      return parseFloat(clean);
-    }
-  };
-
-  const generateImportPreview = () => {
-    if (mapping.date === -1 || mapping.description === -1 || mapping.amount === -1) {
-      alert("Por favor, selecione as colunas de Data, Descrição e Valor.");
-      return;
-    }
-
-    const preview = csvRawData.map((row, idx) => {
-      let rawDate = row[mapping.date] || '';
-      let date = rawDate;
-      if (rawDate.includes('/')) {
-        const parts = rawDate.split('/');
-        if (parts.length === 3) {
-          date = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
-        }
-      }
-
-      let amount = parseValue(row[mapping.amount] || '0');
-
-      return {
-        id: `prev-${idx}`,
-        date,
-        description: row[mapping.description] || 'Sem descrição',
-        amount: Math.abs(amount),
-        type: amount >= 0 ? 'income' : 'expense',
-        selected: !isNaN(amount) && date.length >= 10
-      };
-    });
-
-    setImportPreview(preview);
-    setImportStep(3);
-  };
-
-  const handleFinalImport = () => {
-    const toImport = importPreview.filter(p => p.selected);
-    const defaultExpenseCat = categories.find(c => c.type === 'expense')?.id || categories[0]?.id;
-    const defaultIncomeCat = categories.find(c => c.type === 'income')?.id || categories[0]?.id;
-
-    toImport.forEach(item => {
-      addTransaction({
-        description: item.description,
-        amount: item.amount,
-        date: item.date,
-        type: item.type,
-        accountId: mapping.accountId,
-        categoryId: item.type === 'income' ? defaultIncomeCat : defaultExpenseCat
-      });
-    });
-
-    setShowImportModal(false);
-    setImportStep(1);
-    setImportPreview([]);
-    setCsvRawData([]);
-    setRawCsvText('');
   };
 
   const getCategoryFullName = (catId: string) => {
@@ -273,21 +254,13 @@ export const Transactions: React.FC = () => {
   const filteredTransactions = useMemo(() => {
     return transactions.filter(t => {
       const matchSearch = t.description.toLowerCase().includes(searchTerm.toLowerCase());
-      const trDate = t.date;
-      const matchStartDate = !filters.startDate || trDate >= filters.startDate;
-      const matchEndDate = !filters.endDate || trDate <= filters.endDate;
+      const matchStartDate = !filters.startDate || t.date >= filters.startDate;
+      const matchEndDate = !filters.endDate || t.date <= filters.endDate;
       const matchCategory = !filters.categoryId || t.categoryId === filters.categoryId;
       const matchAccount = !filters.accountId || t.accountId === filters.accountId || t.toAccountId === filters.accountId;
       return matchSearch && matchStartDate && matchEndDate && matchCategory && matchAccount;
     });
   }, [transactions, searchTerm, filters]);
-
-  const hasActiveFilters = filters.startDate || filters.endDate || filters.categoryId || filters.accountId || searchTerm;
-
-  const clearFilters = () => {
-    setFilters({ startDate: '', endDate: '', categoryId: '', accountId: '' });
-    setSearchTerm('');
-  };
 
   const formatCurrency = (val: number) => 
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
@@ -297,12 +270,19 @@ export const Transactions: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Transações</h1>
-          <p className="text-slate-500 dark:text-slate-400">Gerencie e filtre seus lançamentos por período e categoria.</p>
+          <p className="text-slate-500 dark:text-slate-400">Gerencie seus lançamentos e escaneie notas fiscais.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <button 
+            onClick={() => startCamera()}
+            className="flex items-center justify-center gap-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-slate-800/50 px-5 py-3 rounded-xl transition-all font-semibold hover:bg-emerald-100 dark:hover:bg-emerald-900/40 active:scale-[0.98]"
+          >
+            <Camera className="w-5 h-5" />
+            Scanner de Nota
+          </button>
           <button 
             onClick={() => setShowImportModal(true)}
-            className="flex items-center justify-center gap-2 bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-slate-800 px-5 py-3 rounded-xl transition-all font-semibold hover:bg-emerald-50 dark:hover:bg-slate-800 active:scale-[0.98]"
+            className="flex items-center justify-center gap-2 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-800 px-5 py-3 rounded-xl transition-all font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 active:scale-[0.98]"
           >
             <Upload className="w-5 h-5" />
             Importar CSV
@@ -317,7 +297,6 @@ export const Transactions: React.FC = () => {
         </div>
       </div>
 
-      {/* Barra de Filtros */}
       <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm space-y-4 transition-all">
         <div className="flex flex-col xl:flex-row gap-4">
           <div className="flex-1 relative min-w-[200px]">
@@ -330,61 +309,21 @@ export const Transactions: React.FC = () => {
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-center">
-            <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-1.5 group focus-within:ring-2 focus-within:ring-emerald-500/20 focus-within:border-emerald-500 transition-all">
-              <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-tighter">De</span>
-              <input 
-                type="date"
-                className="bg-transparent text-xs outline-none w-full text-slate-700 dark:text-slate-200"
-                value={filters.startDate}
-                onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
-              />
-            </div>
-            <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-1.5 group focus-within:ring-2 focus-within:ring-emerald-500/20 focus-within:border-emerald-500 transition-all">
-              <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-tighter">Até</span>
-              <input 
-                type="date"
-                className="bg-transparent text-xs outline-none w-full text-slate-700 dark:text-slate-200"
-                value={filters.endDate}
-                onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
-              />
-            </div>
-            <select 
-              className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-emerald-500/20"
-              value={filters.categoryId}
-              onChange={(e) => setFilters({ ...filters, categoryId: e.target.value })}
-            >
-              <option value="">Todas Categorias</option>
-              <optgroup label="Sistema">
-                <option value="sys-transfer">🔄 Transferência</option>
-                <option value="sys-adjustment">⚖️ Ajuste de Saldo</option>
-              </optgroup>
-              <optgroup label="Suas Categorias">
-                {categories
-                  .sort((a, b) => getCategoryFullName(a.id).localeCompare(getCategoryFullName(b.id)))
-                  .map(c => <option key={c.id} value={c.id}>{getCategoryFullName(c.id)}</option>)}
-              </optgroup>
-            </select>
-            <select 
-              className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-emerald-500/20"
-              value={filters.accountId}
-              onChange={(e) => setFilters({ ...filters, accountId: e.target.value })}
-            >
-              <option value="">Todas as Contas</option>
-              {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-            </select>
+             <input type="date" className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-700 dark:text-slate-200 outline-none" value={filters.startDate} onChange={(e) => setFilters({ ...filters, startDate: e.target.value })} />
+             <input type="date" className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-700 dark:text-slate-200 outline-none" value={filters.endDate} onChange={(e) => setFilters({ ...filters, endDate: e.target.value })} />
+             <select className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-700 dark:text-slate-200 outline-none" value={filters.categoryId} onChange={(e) => setFilters({ ...filters, categoryId: e.target.value })}>
+               <option value="">Todas Categorias</option>
+               {categories.map(c => <option key={c.id} value={c.id}>{getCategoryFullName(c.id)}</option>)}
+             </select>
+             <select className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-700 dark:text-slate-200 outline-none" value={filters.accountId} onChange={(e) => setFilters({ ...filters, accountId: e.target.value })}>
+               <option value="">Todas as Contas</option>
+               {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+             </select>
           </div>
-
-          {hasActiveFilters && (
-            <button onClick={clearFilters} className="flex items-center justify-center gap-1.5 px-4 py-2 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-xl transition-colors text-xs font-bold whitespace-nowrap">
-              <X className="w-4 h-4" /> Limpar Filtros
-            </button>
-          )}
         </div>
       </div>
 
-      {/* Tabela de Transações */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden transition-all">
         <div className="overflow-x-auto">
           <table className="w-full text-left">
@@ -400,57 +339,27 @@ export const Transactions: React.FC = () => {
             <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
               {filteredTransactions.map(t => {
                 const cat = categories.find(c => c.id === t.categoryId);
-                const parent = cat?.parentId ? categories.find(c => c.id === cat.parentId) : null;
                 const acc = accounts.find(a => a.id === t.accountId);
-                const toAcc = t.toAccountId ? accounts.find(a => a.id === t.toAccountId) : null;
-                
                 return (
-                  <tr key={t.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors group">
+                  <tr key={t.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors group text-sm">
                     <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                         {t.type === 'transfer' && <ArrowRightLeft className="w-4 h-4 text-blue-500 dark:text-blue-400" />}
-                         {t.type === 'adjustment' && <SlidersHorizontal className="w-4 h-4 text-purple-500 dark:text-purple-400" />}
-                         <div>
-                            <p className="font-medium text-slate-900 dark:text-slate-100">{t.description}</p>
-                            <p className="text-xs text-slate-400 dark:text-slate-500">{new Date(t.date + 'T00:00:00').toLocaleDateString()}</p>
-                         </div>
-                      </div>
+                       <p className="font-medium text-slate-900 dark:text-slate-100">{t.description}</p>
+                       <p className="text-[10px] text-slate-400 dark:text-slate-500">{new Date(t.date + 'T00:00:00').toLocaleDateString()}</p>
                     </td>
                     <td className="px-6 py-4">
-                      {t.type === 'transfer' ? (
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 uppercase tracking-wider">Transferência</span>
-                      ) : t.type === 'adjustment' ? (
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-400 uppercase tracking-wider">Ajuste</span>
-                      ) : (
-                        <div className="flex flex-col">
-                          {parent && <span className="text-[9px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-tighter flex items-center gap-0.5">{parent.name} <ChevronRight className="w-2 h-2" /></span>}
-                          <span className="inline-flex items-center text-xs font-medium text-slate-800 dark:text-slate-200">
-                            {cat?.icon} {cat?.name}
-                          </span>
-                        </div>
-                      )}
+                       <span className="inline-flex items-center text-xs font-medium text-slate-800 dark:text-slate-200">
+                         {cat?.icon} {cat?.name || 'Sistema'}
+                       </span>
                     </td>
-                    <td className="px-6 py-4 text-sm text-slate-500 dark:text-slate-400">
-                      {t.type === 'transfer' ? (
-                        <div className="flex items-center gap-2">
-                           <span className="font-medium text-slate-700 dark:text-slate-300">{acc?.name}</span> 
-                           <ArrowRightLeft className="w-3 h-3 text-slate-400 dark:text-slate-600" /> 
-                           <span className="font-medium text-slate-700 dark:text-slate-300">{toAcc?.name}</span>
-                        </div>
-                      ) : acc?.name}
-                    </td>
-                    <td className={`px-6 py-4 text-sm font-bold text-right ${
-                      t.type === 'income' ? 'text-emerald-600 dark:text-emerald-400' : 
-                      t.type === 'expense' ? 'text-slate-900 dark:text-slate-100' :
-                      t.type === 'adjustment' ? (t.amount >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400') : 'text-blue-600 dark:text-blue-400'
-                    }`}>
-                      {t.type === 'income' ? '+' : t.type === 'expense' ? '-' : t.amount >= 0 ? '+' : '-'} {formatCurrency(Math.abs(t.amount))}
+                    <td className="px-6 py-4 text-slate-500 dark:text-slate-400">{acc?.name}</td>
+                    <td className={`px-6 py-4 font-bold text-right ${t.type === 'income' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-900 dark:text-slate-100'}`}>
+                      {t.type === 'income' ? '+' : '-'} {formatCurrency(Math.abs(t.amount))}
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={() => handleEdit(t)} className="text-slate-400 dark:text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors p-1"><Edit2 className="w-4 h-4" /></button>
-                        <button onClick={() => deleteTransaction(t.id)} className="text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 transition-colors p-1"><Trash2 className="w-4 h-4" /></button>
-                      </div>
+                       <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                         <button onClick={() => handleEdit(t)} className="text-slate-400 hover:text-emerald-600 transition-colors"><Edit2 className="w-4 h-4" /></button>
+                         <button onClick={() => deleteTransaction(t.id)} className="text-slate-400 hover:text-rose-600 transition-colors"><Trash2 className="w-4 h-4" /></button>
+                       </div>
                     </td>
                   </tr>
                 );
@@ -460,264 +369,138 @@ export const Transactions: React.FC = () => {
         </div>
       </div>
 
-      {/* Modal Importar CSV */}
-      {showImportModal && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowImportModal(false)} />
-          <div className="relative bg-white dark:bg-slate-900 w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in duration-300">
-            <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-              <div>
-                <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100">Importar CSV</h3>
-                <p className="text-xs text-slate-400 dark:text-slate-500 uppercase font-bold tracking-widest mt-1">Passo {importStep} de 3</p>
-              </div>
-              <button onClick={() => setShowImportModal(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-2 bg-slate-50 dark:bg-slate-800 rounded-full transition-all">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      {showScanner && (
+        <div className="fixed inset-0 z-[100] flex flex-col bg-black">
+          <div className="p-6 flex items-center justify-between text-white z-10 bg-gradient-to-b from-black/80 to-transparent">
+             <div>
+                <h3 className="text-xl font-bold flex items-center gap-2">
+                   <Sparkles className="w-5 h-5 text-emerald-400" />
+                   Scanner Inteligente
+                </h3>
+                <p className="text-xs text-slate-400">
+                  {facingMode === 'user' ? 'Usando câmera frontal' : 'Usando câmera traseira'}
+                </p>
+             </div>
+             <button onClick={stopCamera} className="p-2 bg-white/10 rounded-full hover:bg-white/20 transition-all">
+                <X className="w-6 h-6" />
+             </button>
+          </div>
 
-            <div className="p-8">
-              {/* Passo 1: Upload */}
-              {importStep === 1 && (
-                <div className="space-y-6">
-                  <div 
-                    onClick={() => fileInputRef.current?.click()}
-                    onDragOver={handleDragOver}
-                    onDragLeave={handleDragLeave}
-                    onDrop={handleDrop}
-                    className={`border-2 border-dashed rounded-3xl p-12 flex flex-col items-center justify-center gap-4 transition-all cursor-pointer group
-                      ${isDragging 
-                        ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/10' 
-                        : 'border-slate-200 dark:border-slate-800 hover:border-emerald-500 dark:hover:border-emerald-400 hover:bg-emerald-50/50 dark:hover:bg-slate-800'}`}
-                  >
-                    <div className={`w-16 h-16 rounded-2xl flex items-center justify-center transition-transform
-                      ${isDragging ? 'bg-emerald-600 dark:bg-emerald-500 text-white scale-110' : 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 group-hover:scale-110'}`}>
-                      <FileText className="w-8 h-8" />
-                    </div>
-                    <div className="text-center">
-                      <p className="text-lg font-bold text-slate-700 dark:text-slate-200">
-                        {isDragging ? 'Solte o arquivo aqui!' : 'Arraste seu arquivo CSV ou clique aqui'}
-                      </p>
-                      <p className="text-sm text-slate-400 dark:text-slate-500">Extrato bancário, faturas de cartão, etc.</p>
-                    </div>
-                  </div>
-                  <input type="file" ref={fileInputRef} className="hidden" accept=".csv" onChange={handleFileSelect} />
-                  
-                  <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 flex gap-3">
-                     <AlertCircle className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                     <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">Dica: Quase todos os bancos brasileiros usam ponto e vírgula (;), mas alguns como o Nubank podem exportar com vírgula (,) dependendo do dispositivo.</p>
-                  </div>
+          <div className="flex-1 relative flex items-center justify-center overflow-hidden">
+             <video 
+                ref={videoRef} 
+                autoPlay 
+                playsInline 
+                style={{ transform: facingMode === 'user' ? 'scaleX(-1)' : 'none' }}
+                className="w-full h-full object-cover"
+             />
+             <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                <div className="w-[80%] aspect-[3/4] border-2 border-emerald-500/50 rounded-3xl shadow-[0_0_0_9999px_rgba(0,0,0,0.6)] flex items-center justify-center">
+                   <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-emerald-500 rounded-tl-xl" />
+                   <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-emerald-500 rounded-tr-xl" />
+                   <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-emerald-500 rounded-bl-xl" />
+                   <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-emerald-500 rounded-br-xl" />
+                   
+                   {isScanning && (
+                     <div className="absolute inset-0 bg-emerald-500/10 flex flex-col items-center justify-center gap-4">
+                        <Loader2 className="w-12 h-12 text-emerald-400 animate-spin" />
+                        <span className="text-emerald-400 font-bold tracking-widest text-xs uppercase animate-pulse">Analisando Nota...</span>
+                     </div>
+                   )}
                 </div>
-              )}
+             </div>
+          </div>
 
-              {/* Passo 2: Mapeamento */}
-              {importStep === 2 && (
-                <div className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-1">
-                      <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Separador do Arquivo</label>
-                      <select 
-                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-xl outline-none"
-                        value={mapping.separator}
-                        onChange={(e) => {
-                          const newSep = e.target.value;
-                          setMapping(prev => ({ ...prev, separator: newSep }));
-                          processCsvText(rawCsvText, newSep);
-                        }}
-                      >
-                        <option value=";">Ponto e vírgula (;)</option>
-                        <option value=",">Vírgula (,)</option>
-                        <option value="\t">Tabulação (Tab)</option>
-                      </select>
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Conta para Importar</label>
-                      <select 
-                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-xl outline-none"
-                        value={mapping.accountId}
-                        onChange={(e) => setMapping({...mapping, accountId: e.target.value})}
-                      >
-                        {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="bg-emerald-50/50 dark:bg-emerald-900/10 p-6 rounded-3xl border border-emerald-100 dark:border-emerald-900/30 space-y-4 transition-all">
-                    <h4 className="text-sm font-bold text-emerald-800 dark:text-emerald-400 flex items-center gap-2"><SlidersHorizontal className="w-4 h-4" /> Mapeamento de Colunas</h4>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase">Data</label>
-                        <select className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-emerald-100 dark:border-emerald-900/30 dark:text-slate-200 rounded-lg text-sm" value={mapping.date} onChange={e => setMapping({...mapping, date: parseInt(e.target.value)})}>
-                          <option value="-1">Selecionar...</option>
-                          {csvHeaders.map((h, i) => <option key={i} value={i}>{h || `Coluna ${i+1}`}</option>)}
-                        </select>
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase">Descrição</label>
-                        <select className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-emerald-100 dark:border-emerald-900/30 dark:text-slate-200 rounded-lg text-sm" value={mapping.description} onChange={e => setMapping({...mapping, description: parseInt(e.target.value)})}>
-                          <option value="-1">Selecionar...</option>
-                          {csvHeaders.map((h, i) => <option key={i} value={i}>{h || `Coluna ${i+1}`}</option>)}
-                        </select>
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase">Valor (R$)</label>
-                        <select className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-emerald-100 dark:border-emerald-900/30 dark:text-slate-200 rounded-lg text-sm" value={mapping.amount} onChange={e => setMapping({...mapping, amount: parseInt(e.target.value)})}>
-                          <option value="-1">Selecionar...</option>
-                          {csvHeaders.map((h, i) => <option key={i} value={i}>{h || `Coluna ${i+1}`}</option>)}
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-between pt-4">
-                    <button onClick={() => { setImportStep(1); setCsvRawData([]); setRawCsvText(''); }} className="flex items-center gap-2 text-slate-500 dark:text-slate-400 font-bold hover:text-slate-700 dark:hover:text-slate-200 transition-all">
-                      <ChevronLeft className="w-5 h-5" /> Voltar
-                    </button>
-                    <button onClick={generateImportPreview} className="bg-emerald-600 dark:bg-emerald-500 text-white px-8 py-3 rounded-2xl font-bold shadow-lg shadow-emerald-100 dark:shadow-none hover:bg-emerald-700 dark:hover:bg-emerald-400 transition-all">
-                      Gerar Prévia
-                    </button>
-                  </div>
+          <div className="p-10 flex items-center justify-center gap-8 bg-gradient-to-t from-black/80 to-transparent">
+             <button 
+                onClick={toggleCamera}
+                className="p-4 bg-white/10 rounded-full text-white hover:bg-white/20 transition-all"
+                title="Alternar Câmera"
+             >
+                <RefreshCw className="w-6 h-6" />
+             </button>
+             
+             <button 
+                disabled={isScanning}
+                onClick={captureAndScan}
+                className={`w-20 h-20 rounded-full border-4 border-white flex items-center justify-center transition-all active:scale-90
+                  ${isScanning ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/10'}`}
+             >
+                <div className="w-16 h-16 rounded-full bg-white flex items-center justify-center text-black">
+                   <Camera className="w-8 h-8" />
                 </div>
-              )}
-
-              {/* Passo 3: Revisão */}
-              {importStep === 3 && (
-                <div className="space-y-6">
-                  <div className="max-h-[300px] overflow-y-auto border border-slate-100 dark:border-slate-800 rounded-2xl">
-                    <table className="w-full text-left text-xs">
-                      <thead className="bg-slate-50 dark:bg-slate-800 sticky top-0">
-                        <tr>
-                          <th className="px-4 py-3"><input type="checkbox" className="accent-emerald-500" checked={importPreview.length > 0 && importPreview.every(p => p.selected)} onChange={(e) => setImportPreview(importPreview.map(p => ({...p, selected: e.target.checked})))} /></th>
-                          <th className="px-4 py-3 text-slate-400 dark:text-slate-500 font-bold uppercase">Data</th>
-                          <th className="px-4 py-3 text-slate-400 dark:text-slate-500 font-bold uppercase">Descrição</th>
-                          <th className="px-4 py-3 text-slate-400 dark:text-slate-500 font-bold uppercase text-right">Valor</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
-                        {importPreview.map(row => (
-                          <tr key={row.id} className={`hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors ${!row.selected ? 'opacity-50' : ''}`}>
-                            <td className="px-4 py-3"><input type="checkbox" className="accent-emerald-500" checked={row.selected} onChange={() => setImportPreview(importPreview.map(p => p.id === row.id ? {...p, selected: !p.selected} : p))} /></td>
-                            <td className="px-4 py-3 font-medium dark:text-slate-300">{new Date(row.date + 'T00:00:00').toLocaleDateString()}</td>
-                            <td className="px-4 py-3 truncate max-w-[200px] dark:text-slate-300">{row.description}</td>
-                            <td className={`px-4 py-3 font-bold text-right ${row.type === 'income' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-900 dark:text-slate-200'}`}>
-                              {row.type === 'income' ? '+' : '-'} {formatCurrency(row.amount)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                     <p className="text-sm font-bold text-slate-600 dark:text-slate-300">{importPreview.filter(p => p.selected).length} transações selecionadas</p>
-                     <p className="text-xs text-slate-400 dark:text-slate-500">Padrão: {accounts.find(a => a.id === mapping.accountId)?.name}</p>
-                  </div>
-
-                  <div className="flex justify-between pt-4">
-                    <button onClick={() => setImportStep(2)} className="flex items-center gap-2 text-slate-500 dark:text-slate-400 font-bold hover:text-slate-700 dark:hover:text-slate-200 transition-all">
-                      <ChevronLeft className="w-5 h-5" /> Voltar
-                    </button>
-                    <button onClick={handleFinalImport} className="flex items-center gap-2 bg-emerald-600 dark:bg-emerald-500 text-white px-8 py-4 rounded-2xl font-bold shadow-lg shadow-emerald-100 dark:shadow-none hover:bg-emerald-700 dark:hover:bg-emerald-400 transition-all active:scale-[0.98]">
-                      <Check className="w-5 h-5" /> Finalizar Importação
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
+             </button>
+             
+             <div className="w-14" />
+             
+             <canvas ref={canvasRef} className="hidden" />
           </div>
         </div>
       )}
 
-      {/* Modal Cadastro Manual */}
       {showModal && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={handleCloseModal} />
           <div className="relative bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in duration-300">
             <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-              <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100">{editingId ? 'Editar Lançamento' : 'Novo Lançamento'}</h3>
+              <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100">Confirmar Lançamento</h3>
               <button onClick={handleCloseModal} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1"><Plus className="w-6 h-6 rotate-45" /></button>
             </div>
             <form onSubmit={handleSubmit} className="p-6 space-y-5">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
-                {[
-                  { id: 'expense', label: 'Despesa' },
-                  { id: 'income', label: 'Receita' },
-                  { id: 'transfer', label: 'Transf.' },
-                  { id: 'adjustment', label: 'Ajuste' }
-                ].map(type => (
+                {['expense', 'income', 'transfer', 'adjustment'].map(type => (
                   <button
-                    key={type.id}
-                    type="button"
-                    onClick={() => handleTypeChange(type.id as TransactionType)}
-                    className={`py-2 text-xs font-bold rounded-lg transition-all ${formData.type === type.id ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}
+                    key={type} type="button" onClick={() => handleTypeChange(type as TransactionType)}
+                    className={`py-2 text-[10px] font-bold rounded-lg transition-all ${formData.type === type ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}
                   >
-                    {type.label}
+                    {type === 'expense' ? 'Despesa' : type === 'income' ? 'Receita' : type === 'transfer' ? 'Transf.' : 'Ajuste'}
                   </button>
                 ))}
               </div>
-
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Descrição</label>
-                <input 
-                  type="text" required
-                  className="w-full px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 dark:text-slate-100 rounded-lg outline-none focus:border-emerald-500 transition-all"
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                />
+                <input type="text" required className="w-full px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 dark:text-slate-100 rounded-lg outline-none focus:border-emerald-500" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} />
               </div>
-
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Valor (R$)</label>
-                  <input 
-                    type="number" step="0.01" required
-                    className="w-full px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 dark:text-slate-100 rounded-lg outline-none focus:border-emerald-500"
-                    value={formData.type === 'adjustment' ? formData.targetBalance : formData.amount}
-                    onChange={(e) => setFormData({ ...formData, [formData.type === 'adjustment' ? 'targetBalance' : 'amount']: e.target.value })}
-                  />
+                  <input type="number" step="0.01" required className="w-full px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 dark:text-slate-100 rounded-lg outline-none focus:border-emerald-500" value={formData.amount} onChange={(e) => setFormData({ ...formData, amount: e.target.value })} />
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Data</label>
                   <input type="date" required className="w-full px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 dark:text-slate-100 rounded-lg outline-none focus:border-emerald-500" value={formData.date} onChange={(e) => setFormData({ ...formData, date: e.target.value })} />
                 </div>
               </div>
-
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Conta</label>
-                  <select required className="w-full px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 dark:text-slate-100 rounded-lg outline-none focus:border-emerald-500" value={formData.accountId} onChange={(e) => setFormData({ ...formData, accountId: e.target.value })}>
-                    <option value="">Selecione...</option>
+                  <select required className="w-full px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 dark:text-slate-100 rounded-lg outline-none" value={formData.accountId} onChange={(e) => setFormData({ ...formData, accountId: e.target.value })}>
                     {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                   </select>
                 </div>
-                {formData.type === 'transfer' ? (
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Conta Destino</label>
-                    <select required className="w-full px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 dark:text-slate-100 rounded-lg outline-none focus:border-emerald-500" value={formData.toAccountId} onChange={(e) => setFormData({ ...formData, toAccountId: e.target.value })}>
-                      <option value="">Selecione...</option>
-                      {accounts.filter(a => a.id !== formData.accountId).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                    </select>
-                  </div>
-                ) : formData.type === 'adjustment' ? null : (
-                  <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Categoria</label>
-                    <select required className="w-full px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 dark:text-slate-100 rounded-lg outline-none focus:border-emerald-500" value={formData.categoryId} onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}>
-                      <option value="">Selecione...</option>
-                      {categories
-                        .filter(c => c.type === (formData.type === 'income' ? 'income' : 'expense'))
-                        .sort((a, b) => getCategoryFullName(a.id).localeCompare(getCategoryFullName(b.id)))
-                        .map(c => (
-                          <option key={c.id} value={c.id}>{getCategoryFullName(c.id)}</option>
-                        ))}
-                    </select>
-                  </div>
-                )}
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Categoria</label>
+                  <select required className="w-full px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 dark:text-slate-100 rounded-lg outline-none" value={formData.categoryId} onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}>
+                    {categories.filter(c => c.type === (formData.type === 'income' ? 'income' : 'expense')).map(c => <option key={c.id} value={c.id}>{getCategoryFullName(c.id)}</option>)}
+                  </select>
+                </div>
               </div>
-
-              <button type="submit" className="w-full py-4 bg-emerald-600 dark:bg-emerald-500 hover:bg-emerald-700 dark:hover:bg-emerald-400 text-white font-bold rounded-xl shadow-lg dark:shadow-none transition-all mt-4 active:scale-[0.98]">
-                {editingId ? 'Salvar Alterações' : 'Confirmar Lançamento'}
+              <button type="submit" className="w-full py-4 bg-emerald-600 dark:bg-emerald-500 hover:bg-emerald-700 dark:hover:bg-emerald-400 text-white font-bold rounded-xl transition-all active:scale-[0.98]">
+                Salvar Lançamento
               </button>
             </form>
           </div>
+        </div>
+      )}
+
+      {showImportModal && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowImportModal(false)} />
+           <div className="relative bg-white dark:bg-slate-900 w-full max-w-2xl rounded-3xl shadow-2xl p-6">
+              <h3 className="text-xl font-bold mb-4">Importar CSV</h3>
+              <p className="text-sm text-slate-500 mb-6">Em breve: Suporte completo para importação de extratos bancários.</p>
+              <button onClick={() => setShowImportModal(false)} className="w-full py-3 bg-slate-100 dark:bg-slate-800 rounded-xl font-bold">Fechar</button>
+           </div>
         </div>
       )}
     </div>
