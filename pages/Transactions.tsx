@@ -16,6 +16,7 @@ export const Transactions: React.FC = () => {
 
   // States para Importação
   const [importStep, setImportStep] = useState(1);
+  const [isDragging, setIsDragging] = useState(false);
   const [rawCsvText, setRawCsvText] = useState('');
   const [csvRawData, setCsvRawData] = useState<string[][]>([]);
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
@@ -132,10 +133,7 @@ export const Transactions: React.FC = () => {
   };
 
   // --- Lógica de Importação CSV ---
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  const readFile = (file: File) => {
     const reader = new FileReader();
     reader.onload = (event) => {
       const text = event.target?.result as string;
@@ -143,6 +141,36 @@ export const Transactions: React.FC = () => {
       processCsvText(text, mapping.separator);
     };
     reader.readAsText(file);
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) readFile(file);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type === "text/csv" || file.name.endsWith('.csv')) {
+      readFile(file);
+    } else {
+      alert("Por favor, arraste um arquivo no formato CSV.");
+    }
   };
 
   const processCsvText = (text: string, sep: string) => {
@@ -155,7 +183,6 @@ export const Transactions: React.FC = () => {
     setMapping(prev => ({ 
       ...prev, 
       accountId: prev.accountId || (accounts[0]?.id || ''),
-      // Resetar mapeamentos se o cabeçalho mudar drasticamente
       date: -1, description: -1, amount: -1
     }));
     setImportStep(2);
@@ -165,18 +192,14 @@ export const Transactions: React.FC = () => {
     let clean = val.replace(/[R$\s]/g, '');
     if (!clean) return 0;
 
-    // Lógica para detectar se o separador decimal é ponto ou vírgula
     const lastComma = clean.lastIndexOf(',');
     const lastDot = clean.lastIndexOf('.');
 
     if (lastComma > lastDot) {
-      // Formato BR: 1.234,56 ou 50,00
       return parseFloat(clean.replace(/\./g, '').replace(',', '.'));
     } else if (lastDot > lastComma) {
-      // Formato US/International: 1,234.56 ou 50.00
       return parseFloat(clean.replace(/,/g, ''));
     } else {
-      // Apenas um deles ou nenhum
       if (lastComma !== -1) return parseFloat(clean.replace(',', '.'));
       return parseFloat(clean);
     }
@@ -191,7 +214,6 @@ export const Transactions: React.FC = () => {
     const preview = csvRawData.map((row, idx) => {
       let rawDate = row[mapping.date] || '';
       let date = rawDate;
-      // Tenta converter DD/MM/AAAA para AAAA-MM-DD
       if (rawDate.includes('/')) {
         const parts = rawDate.split('/');
         if (parts.length === 3) {
@@ -238,7 +260,6 @@ export const Transactions: React.FC = () => {
     setRawCsvText('');
   };
 
-  // --- UI Helpers ---
   const getCategoryFullName = (catId: string) => {
     if (catId === 'sys-transfer') return '🔄 Transferência';
     if (catId === 'sys-adjustment') return '⚖️ Ajuste de Saldo';
@@ -460,13 +481,22 @@ export const Transactions: React.FC = () => {
                 <div className="space-y-6">
                   <div 
                     onClick={() => fileInputRef.current?.click()}
-                    className="border-2 border-dashed border-slate-200 rounded-3xl p-12 flex flex-col items-center justify-center gap-4 hover:border-emerald-500 hover:bg-emerald-50/50 transition-all cursor-pointer group"
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                    className={`border-2 border-dashed rounded-3xl p-12 flex flex-col items-center justify-center gap-4 transition-all cursor-pointer group
+                      ${isDragging 
+                        ? 'border-emerald-500 bg-emerald-50' 
+                        : 'border-slate-200 hover:border-emerald-500 hover:bg-emerald-50/50'}`}
                   >
-                    <div className="w-16 h-16 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform">
+                    <div className={`w-16 h-16 rounded-2xl flex items-center justify-center transition-transform
+                      ${isDragging ? 'bg-emerald-600 text-white scale-110' : 'bg-emerald-50 text-emerald-600 group-hover:scale-110'}`}>
                       <FileText className="w-8 h-8" />
                     </div>
                     <div className="text-center">
-                      <p className="text-lg font-bold text-slate-700">Arraste seu arquivo CSV ou clique aqui</p>
+                      <p className="text-lg font-bold text-slate-700">
+                        {isDragging ? 'Solte o arquivo aqui!' : 'Arraste seu arquivo CSV ou clique aqui'}
+                      </p>
                       <p className="text-sm text-slate-400">Extrato bancário, faturas de cartão, etc.</p>
                     </div>
                   </div>
@@ -491,7 +521,6 @@ export const Transactions: React.FC = () => {
                         onChange={(e) => {
                           const newSep = e.target.value;
                           setMapping(prev => ({ ...prev, separator: newSep }));
-                          // Re-processa o texto raw imediatamente com o novo separador
                           processCsvText(rawCsvText, newSep);
                         }}
                       >
