@@ -4,28 +4,40 @@ import { useFinance } from '../FinanceContext';
 import { 
   Plus, Search, Trash2, Edit2, ArrowRightLeft, SlidersHorizontal, 
   ChevronRight, Filter, X, Calendar, Upload, FileText, Check, AlertCircle, 
-  ChevronLeft, Camera, RefreshCw, Sparkles, Loader2, Crown, Zap, ShieldCheck
+  ChevronLeft, Camera, RefreshCw, Sparkles, Loader2, Crown, Zap, ShieldCheck,
+  BrainCircuit, Wand2, FileSpreadsheet, ArrowRight
 } from 'lucide-react';
 import { TransactionType, Transaction, Category } from '../types';
 import { GoogleGenAI, Type } from "@google/genai";
 
 export const Transactions: React.FC = () => {
-  const { transactions, categories, accounts, user, addTransaction, updateTransaction, deleteTransaction, theme, updateUserProfile } = useFinance();
+  const { 
+    transactions, categories, accounts, user, theme,
+    addTransaction, updateTransaction, deleteTransaction, updateUserProfile 
+  } = useFinance();
+  
   const [showModal, setShowModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
+  const [isAiCategorizing, setIsAiCategorizing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  // Câmera
+  // Câmera Refs
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment');
 
+  // Filtros
   const [filters, setFilters] = useState({ startDate: '', endDate: '', categoryId: '', accountId: '' });
+
+  // Importação CSV
+  const [importedRows, setImportedRows] = useState<any[]>([]);
+  const [importAccountId, setImportAccountId] = useState('');
 
   const [formData, setFormData] = useState({
     description: '', amount: '', targetBalance: '',
@@ -57,23 +69,13 @@ export const Transactions: React.FC = () => {
   }, [showModal, editingId, categories, accounts]);
 
   const handleScannerClick = () => {
-    if (user?.plan === 'premium') {
-      startCamera();
-    } else {
-      setShowUpgradeModal(true);
-    }
-  };
-
-  const getInitialFacingMode = () => {
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    return isMobile ? 'environment' : 'user';
+    if (user?.plan === 'premium') startCamera();
+    else setShowUpgradeModal(true);
   };
 
   const startCamera = async (mode?: 'user' | 'environment') => {
-    if (stream) {
-      stream.getTracks().forEach(track => track.stop());
-    }
-    const modeToUse = mode || getInitialFacingMode();
+    if (stream) stream.getTracks().forEach(track => track.stop());
+    const modeToUse = mode || 'environment';
     setFacingMode(modeToUse);
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({ 
@@ -82,26 +84,14 @@ export const Transactions: React.FC = () => {
       setStream(mediaStream);
       setShowScanner(true);
     } catch (err) {
-      if (!mode) {
-        startCamera(modeToUse === 'environment' ? 'user' : 'environment');
-      } else {
-        alert("Não foi possível acessar a câmera.");
-        console.error(err);
-      }
+      alert("Não foi possível acessar a câmera.");
     }
   };
 
   const stopCamera = () => {
-    if (stream) {
-      stream.getTracks().forEach(track => track.stop());
-      setStream(null);
-    }
+    if (stream) stream.getTracks().forEach(track => track.stop());
+    setStream(null);
     setShowScanner(false);
-  };
-
-  const toggleCamera = () => {
-    const newMode = facingMode === 'user' ? 'environment' : 'user';
-    startCamera(newMode);
   };
 
   const captureAndScan = async () => {
@@ -112,12 +102,9 @@ export const Transactions: React.FC = () => {
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     const ctx = canvas.getContext('2d');
-    if (facingMode === 'user') {
-      ctx?.translate(canvas.width, 0);
-      ctx?.scale(-1, 1);
-    }
     ctx?.drawImage(video, 0, 0);
     const base64Image = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+    
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
@@ -125,7 +112,7 @@ export const Transactions: React.FC = () => {
         contents: {
           parts: [
             { inlineData: { mimeType: 'image/jpeg', data: base64Image } },
-            { text: "Extraia os dados deste cupom fiscal. Retorne um JSON com: 'estabelecimento', 'data' (YYYY-MM-DD), 'valor_total' (number) e uma string curta 'resumo_itens' listando os principais itens." }
+            { text: "Extraia os dados deste cupom fiscal. Retorne um JSON com: 'estabelecimento', 'data' (YYYY-MM-DD), 'valor_total' (number) e 'resumo_itens' (string curta)." }
           ]
         },
         config: {
@@ -160,6 +147,101 @@ export const Transactions: React.FC = () => {
     } finally {
       setIsScanning(false);
     }
+  };
+
+  // --- LÓGICA DE IMPORTAÇÃO CSV & IA ---
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      const lines = text.split('\n');
+      const parsed = lines.slice(1).filter(l => l.trim()).map(line => {
+        const parts = line.split(','); // Simplificação: assume CSV separado por vírgula
+        return {
+          id: Math.random().toString(36).substr(2, 9),
+          date: parts[0]?.trim() || new Date().toISOString().split('T')[0],
+          description: parts[1]?.trim() || 'Sem descrição',
+          amount: Math.abs(parseFloat(parts[2]?.trim() || '0')),
+          type: parseFloat(parts[2]) < 0 ? 'expense' : 'income',
+          categoryId: '',
+          isAiSuggested: false
+        };
+      });
+      setImportedRows(parsed);
+      setImportAccountId(accounts[0]?.id || '');
+    };
+    reader.readAsText(file);
+  };
+
+  const handleAiCategorize = async () => {
+    if (user?.plan !== 'premium') {
+      setShowUpgradeModal(true);
+      return;
+    }
+    if (importedRows.length === 0 || isAiCategorizing) return;
+
+    setIsAiCategorizing(true);
+    try {
+      const descriptions = importedRows.map(r => r.description);
+      const expenseCats = categories.filter(c => c.type === 'expense').map(c => ({ id: c.id, name: c.name }));
+      
+      // Histórico para "treinar" a IA no contexto do usuário
+      const history = transactions.slice(0, 30).map(t => ({ desc: t.description, catId: t.categoryId }));
+
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: {
+          parts: [{
+            text: `Aja como um assistente de organização financeira. 
+            Vou te dar uma lista de descrições de transações e você deve associá-las à melhor categoria da lista fornecida.
+            
+            LISTA DE CATEGORIAS: ${JSON.stringify(expenseCats)}
+            HISTÓRICO DO USUÁRIO: ${JSON.stringify(history)}
+            TRANSAÇÕES PARA CATEGORIZAR: ${JSON.stringify(descriptions)}
+
+            REGRAS:
+            - Exemplos comuns: Uber -> Transporte, Ifood -> Alimentação, Amazon -> Compras/Eletrônicos.
+            - Retorne APENAS um objeto JSON onde a CHAVE é a descrição e o VALOR é o categoryId correspondente.`
+          }]
+        },
+        config: { responseMimeType: "application/json" }
+      });
+
+      const mapping = JSON.parse(response.text);
+      setImportedRows(prev => prev.map(row => ({
+        ...row,
+        categoryId: mapping[row.description] || row.categoryId,
+        isAiSuggested: !!mapping[row.description]
+      })));
+    } catch (err) {
+      console.error(err);
+      alert("Erro na categorização inteligente.");
+    } finally {
+      setIsAiCategorizing(false);
+    }
+  };
+
+  const finalizeImport = () => {
+    if (!importAccountId) return;
+    
+    importedRows.forEach(row => {
+      addTransaction({
+        description: row.description,
+        amount: row.amount,
+        date: row.date,
+        categoryId: row.categoryId || (row.type === 'income' ? categories.find(c => c.type === 'income')?.id : categories.find(c => c.type === 'expense')?.id) || '',
+        accountId: importAccountId,
+        type: row.type as TransactionType
+      });
+    });
+
+    setShowImportModal(false);
+    setImportedRows([]);
+    alert(`${importedRows.length} transações importadas com sucesso!`);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -198,7 +280,7 @@ export const Transactions: React.FC = () => {
     if (catId === 'sys-transfer') return '🔄 Transferência';
     if (catId === 'sys-adjustment') return '⚖️ Ajuste de Saldo';
     const cat = categories.find(c => c.id === catId);
-    if (!cat) return '';
+    if (!cat) return 'Sem Categoria';
     if (!cat.parentId) return `${cat.icon} ${cat.name}`;
     const parent = categories.find(c => c.id === cat.parentId);
     return `${parent?.icon || ''} ${parent?.name || ''} > ${cat.icon} ${cat.name}`;
@@ -223,7 +305,7 @@ export const Transactions: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Transações</h1>
-          <p className="text-slate-500 dark:text-slate-400">Gerencie seus lançamentos e escaneie notas fiscais.</p>
+          <p className="text-slate-500 dark:text-slate-400">Gerencie seus lançamentos e automatize com IA.</p>
         </div>
         <div className="flex gap-2 flex-wrap">
           <button 
@@ -238,7 +320,7 @@ export const Transactions: React.FC = () => {
             onClick={() => setShowImportModal(true)}
             className="flex items-center justify-center gap-2 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-800 px-5 py-3 rounded-xl transition-all font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 active:scale-[0.98]"
           >
-            <Upload className="w-5 h-5" />
+            <FileSpreadsheet className="w-5 h-5" />
             Importar CSV
           </button>
           <button 
@@ -251,7 +333,6 @@ export const Transactions: React.FC = () => {
         </div>
       </div>
 
-      {/* Tabela e Filtros seguem o mesmo padrão... */}
       <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm space-y-4 transition-all">
         <div className="flex flex-col xl:flex-row gap-4">
           <div className="flex-1 relative min-w-[200px]">
@@ -303,7 +384,7 @@ export const Transactions: React.FC = () => {
                     </td>
                     <td className="px-6 py-4">
                        <span className="inline-flex items-center text-xs font-medium text-slate-800 dark:text-slate-200">
-                         {cat?.icon} {cat?.name || 'Sistema'}
+                         {cat?.icon || '📦'} {cat?.name || 'Sistema'}
                        </span>
                     </td>
                     <td className="px-6 py-4 text-slate-500 dark:text-slate-400">{acc?.name}</td>
@@ -324,49 +405,147 @@ export const Transactions: React.FC = () => {
         </div>
       </div>
 
-      {/* Modal Scanner Inteligente */}
-      {showScanner && (
-        <div className="fixed inset-0 z-[100] flex flex-col bg-black">
-          <div className="p-6 flex items-center justify-between text-white z-10 bg-gradient-to-b from-black/80 to-transparent">
-             <div>
-                <h3 className="text-xl font-bold flex items-center gap-2">
-                   <Sparkles className="w-5 h-5 text-emerald-400" />
-                   Scanner PRO
-                </h3>
-             </div>
-             <button onClick={stopCamera} className="p-2 bg-white/10 rounded-full hover:bg-white/20 transition-all">
-                <X className="w-6 h-6" />
-             </button>
-          </div>
-          <div className="flex-1 relative flex items-center justify-center overflow-hidden">
-             <video 
-                ref={videoRef} 
-                autoPlay 
-                playsInline 
-                style={{ transform: facingMode === 'user' ? 'scaleX(-1)' : 'none' }}
-                className="w-full h-full object-cover"
-             />
-             <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                <div className="w-[80%] aspect-[3/4] border-2 border-emerald-500/50 rounded-3xl shadow-[0_0_0_9999px_rgba(0,0,0,0.6)] flex items-center justify-center">
-                   {isScanning && (
-                     <div className="absolute inset-0 bg-emerald-500/10 flex flex-col items-center justify-center gap-4">
-                        <Loader2 className="w-12 h-12 text-emerald-400 animate-spin" />
-                        <span className="text-emerald-400 font-bold tracking-widest text-xs uppercase animate-pulse">Inteligência Gemini Ativa...</span>
-                     </div>
-                   )}
-                </div>
-             </div>
-          </div>
-          <div className="p-10 flex items-center justify-center gap-8 bg-gradient-to-t from-black/80 to-transparent">
-             <button onClick={toggleCamera} className="p-4 bg-white/10 rounded-full text-white hover:bg-white/20 transition-all"><RefreshCw className="w-6 h-6" /></button>
-             <button disabled={isScanning} onClick={captureAndScan} className="w-20 h-20 rounded-full border-4 border-white flex items-center justify-center transition-all active:scale-90"><div className="w-16 h-16 rounded-full bg-white flex items-center justify-center text-black"><Camera className="w-8 h-8" /></div></button>
-             <div className="w-14" />
-             <canvas ref={canvasRef} className="hidden" />
+      {/* --- MODAL DE IMPORTAÇÃO CSV --- */}
+      {showImportModal && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md" onClick={() => !isAiCategorizing && setShowImportModal(false)} />
+          <div className="relative bg-white dark:bg-slate-900 w-full max-w-3xl rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in duration-300 max-h-[90vh] flex flex-col">
+            <div className="p-8 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0">
+               <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white"><FileSpreadsheet className="w-6 h-6" /></div>
+                  <h3 className="text-xl font-black text-slate-900 dark:text-slate-100 tracking-tight">Importar Lançamentos</h3>
+               </div>
+               <button onClick={() => setShowImportModal(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"><X className="w-5 h-5" /></button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-8 space-y-6">
+               {importedRows.length === 0 ? (
+                 <div 
+                   onClick={() => fileInputRef.current?.click()}
+                   className="border-4 border-dashed border-slate-100 dark:border-slate-800 rounded-[2rem] p-12 flex flex-col items-center justify-center gap-4 hover:border-emerald-500/30 hover:bg-emerald-50/10 transition-all cursor-pointer group"
+                 >
+                    <div className="w-20 h-20 bg-slate-50 dark:bg-slate-800 rounded-3xl flex items-center justify-center text-slate-300 group-hover:text-emerald-500 transition-all">
+                       <Upload className="w-10 h-10" />
+                    </div>
+                    <div className="text-center">
+                       <p className="font-bold text-slate-700 dark:text-slate-200">Arraste seu arquivo CSV ou clique aqui</p>
+                       <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 uppercase tracking-widest font-black">Formato: Data, Descrição, Valor</p>
+                    </div>
+                    <input type="file" ref={fileInputRef} className="hidden" accept=".csv" onChange={handleFileUpload} />
+                 </div>
+               ) : (
+                 <div className="space-y-6">
+                    <div className="flex flex-col sm:flex-row gap-4 items-end">
+                       <div className="flex-1 space-y-1">
+                          <label className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">Importar para a Conta</label>
+                          <select 
+                            className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl outline-none"
+                            value={importAccountId}
+                            onChange={(e) => setImportAccountId(e.target.value)}
+                          >
+                            {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                          </select>
+                       </div>
+                       <button 
+                        onClick={handleAiCategorize}
+                        disabled={isAiCategorizing}
+                        className="flex items-center gap-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-slate-800/50 px-6 py-3 rounded-xl transition-all font-bold hover:bg-emerald-100 disabled:opacity-50 relative group"
+                       >
+                          {isAiCategorizing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Wand2 className="w-5 h-5 group-hover:rotate-12 transition-transform" />}
+                          Categorização Mágica
+                          {user?.plan === 'basic' && <div className="absolute -top-2 -right-2 bg-amber-400 text-amber-900 rounded-full p-1 shadow-sm"><Crown className="w-3.5 h-3.5" /></div>}
+                       </button>
+                    </div>
+
+                    <div className="border border-slate-100 dark:border-slate-800 rounded-2xl overflow-hidden">
+                       <table className="w-full text-xs text-left">
+                          <thead className="bg-slate-50 dark:bg-slate-800/50">
+                             <tr>
+                                <th className="px-4 py-3 font-black uppercase text-slate-400">Transação</th>
+                                <th className="px-4 py-3 font-black uppercase text-slate-400">Valor</th>
+                                <th className="px-4 py-3 font-black uppercase text-slate-400">Categoria</th>
+                             </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
+                             {importedRows.map((row, idx) => (
+                               <tr key={row.id} className="group">
+                                  <td className="px-4 py-3">
+                                     <p className="font-bold text-slate-900 dark:text-slate-100">{row.description}</p>
+                                     <p className="text-[10px] text-slate-400">{row.date}</p>
+                                  </td>
+                                  <td className={`px-4 py-3 font-black ${row.type === 'income' ? 'text-emerald-600' : 'text-slate-900 dark:text-slate-100'}`}>
+                                     {formatCurrency(row.amount)}
+                                  </td>
+                                  <td className="px-4 py-3">
+                                     <div className="relative">
+                                        <select 
+                                          className={`w-full px-3 py-2 rounded-lg border appearance-none transition-all ${row.isAiSuggested ? 'border-emerald-300 bg-emerald-50/30 dark:border-emerald-500/50 dark:bg-emerald-900/10' : 'border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900'}`}
+                                          value={row.categoryId}
+                                          onChange={(e) => {
+                                            const newRows = [...importedRows];
+                                            newRows[idx].categoryId = e.target.value;
+                                            newRows[idx].isAiSuggested = false;
+                                            setImportedRows(newRows);
+                                          }}
+                                        >
+                                           <option value="">Selecionar...</option>
+                                           {categories
+                                            .filter(c => c.type === row.type)
+                                            .map(c => <option key={c.id} value={c.id}>{c.icon} {c.name}</option>)}
+                                        </select>
+                                        {row.isAiSuggested && <Sparkles className="absolute right-8 top-1/2 -translate-y-1/2 w-3 h-3 text-emerald-500" />}
+                                     </div>
+                                  </td>
+                               </tr>
+                             ))}
+                          </tbody>
+                       </table>
+                    </div>
+                 </div>
+               )}
+            </div>
+
+            <div className="p-8 border-t border-slate-100 dark:border-slate-800 flex gap-4 shrink-0">
+               <button 
+                onClick={() => setImportedRows([])}
+                className="px-6 py-4 text-slate-400 font-bold hover:text-slate-600 transition-colors"
+               >
+                  Limpar
+               </button>
+               <button 
+                disabled={importedRows.length === 0 || !importAccountId}
+                onClick={finalizeImport}
+                className="flex-1 py-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-black rounded-2xl shadow-xl shadow-emerald-100 transition-all flex items-center justify-center gap-2"
+               >
+                  Finalizar Importação <ArrowRight className="w-5 h-5" />
+               </button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Paywall Modal (Upgrade) */}
+      {/* Scanner e outros modais permanecem o mesmo... */}
+      {showScanner && (
+        <div className="fixed inset-0 z-[100] flex flex-col bg-black">
+          <div className="p-6 flex items-center justify-between text-white z-10 bg-gradient-to-b from-black/80 to-transparent">
+             <h3 className="text-xl font-bold flex items-center gap-2"><Sparkles className="w-5 h-5 text-emerald-400" /> Scanner PRO</h3>
+             <button onClick={stopCamera} className="p-2 bg-white/10 rounded-full hover:bg-white/20 transition-all"><X className="w-6 h-6" /></button>
+          </div>
+          <div className="flex-1 relative flex items-center justify-center overflow-hidden">
+             <video ref={videoRef} autoPlay playsInline style={{ transform: facingMode === 'user' ? 'scaleX(-1)' : 'none' }} className="w-full h-full object-cover" />
+             <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                <div className="w-[80%] aspect-[3/4] border-2 border-emerald-500/50 rounded-3xl shadow-[0_0_0_9999px_rgba(0,0,0,0.6)]" />
+                {isScanning && <div className="absolute inset-0 bg-emerald-500/10 flex flex-col items-center justify-center gap-4 animate-pulse"><Loader2 className="w-12 h-12 text-emerald-400 animate-spin" /><span className="text-emerald-400 font-bold tracking-widest text-xs uppercase">IA Ativa...</span></div>}
+             </div>
+          </div>
+          <div className="p-10 flex items-center justify-center gap-8 bg-gradient-to-t from-black/80 to-transparent">
+             <button onClick={() => startCamera(facingMode === 'user' ? 'environment' : 'user')} className="p-4 bg-white/10 rounded-full text-white hover:bg-white/20 transition-all"><RefreshCw className="w-6 h-6" /></button>
+             <button disabled={isScanning} onClick={captureAndScan} className="w-20 h-20 rounded-full border-4 border-white flex items-center justify-center transition-all active:scale-90"><div className="w-16 h-16 rounded-full bg-white flex items-center justify-center text-black"><Camera className="w-8 h-8" /></div></button>
+             <div className="w-14" /><canvas ref={canvasRef} className="hidden" />
+          </div>
+        </div>
+      )}
+
       {showUpgradeModal && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
            <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md" onClick={() => setShowUpgradeModal(false)} />
@@ -380,37 +559,21 @@ export const Transactions: React.FC = () => {
                  <p className="text-center text-slate-600 dark:text-slate-400 font-medium">Libere o poder total da sua gestão financeira com IA.</p>
                  <div className="space-y-4">
                     <div className="flex items-center gap-4 p-4 bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl border border-emerald-100 dark:border-emerald-800/50">
-                       <Zap className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
-                       <div>
-                          <p className="font-bold text-slate-800 dark:text-slate-200">Scanner Inteligente</p>
-                          <p className="text-xs text-slate-500 dark:text-slate-400">Leitura de notas fiscais via IA Gemini.</p>
-                       </div>
+                       <BrainCircuit className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+                       <div><p className="font-bold text-slate-800 dark:text-slate-200">Categorização Mágica</p><p className="text-xs text-slate-500 dark:text-slate-400">Classificação inteligente de CSV via IA.</p></div>
                     </div>
                     <div className="flex items-center gap-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800">
-                       <ShieldCheck className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
-                       <div>
-                          <p className="font-bold text-slate-800 dark:text-slate-200">Previsões Avançadas</p>
-                          <p className="text-xs text-slate-500 dark:text-slate-400">Análise profunda de fluxo de caixa futuro.</p>
-                       </div>
+                       <Zap className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+                       <div><p className="font-bold text-slate-800 dark:text-slate-200">Scanner de Notas PRO</p><p className="text-xs text-slate-500 dark:text-slate-400">Leitura instantânea via Gemini.</p></div>
                     </div>
                  </div>
-                 <button 
-                  onClick={() => {
-                    updateUserProfile({ ...user!, plan: 'premium' });
-                    setShowUpgradeModal(false);
-                    alert("Parabéns! Você agora é um usuário PREMIUM.");
-                  }}
-                  className="w-full py-5 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-2xl shadow-xl shadow-emerald-200 dark:shadow-none transition-all active:scale-[0.98]"
-                 >
-                    QUERO SER PRO
-                 </button>
+                 <button onClick={() => { updateUserProfile({ ...user!, plan: 'premium' }); setShowUpgradeModal(false); alert("Parabéns! Você agora é um usuário PREMIUM."); }} className="w-full py-5 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-2xl shadow-xl shadow-emerald-200 dark:shadow-none transition-all active:scale-[0.98]">QUERO SER PRO</button>
                  <p className="text-center text-[10px] text-slate-400 dark:text-slate-500 uppercase font-bold tracking-widest">Apenas R$ 19,90 / mês</p>
               </div>
            </div>
         </div>
       )}
 
-      {/* Modal Cadastro/Edição Normal */}
       {showModal && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={handleCloseModal} />
@@ -455,9 +618,7 @@ export const Transactions: React.FC = () => {
                   </select>
                 </div>
               </div>
-              <button type="submit" className="w-full py-4 bg-emerald-600 dark:bg-emerald-500 hover:bg-emerald-700 dark:hover:bg-emerald-400 text-white font-bold rounded-xl transition-all active:scale-[0.98]">
-                Salvar Lançamento
-              </button>
+              <button type="submit" className="w-full py-4 bg-emerald-600 dark:bg-emerald-500 hover:bg-emerald-700 dark:hover:bg-emerald-400 text-white font-bold rounded-xl transition-all active:scale-[0.98]">Salvar Lançamento</button>
             </form>
           </div>
         </div>
