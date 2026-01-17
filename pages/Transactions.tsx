@@ -4,16 +4,17 @@ import { useFinance } from '../FinanceContext';
 import { 
   Plus, Search, Trash2, Edit2, ArrowRightLeft, SlidersHorizontal, 
   ChevronRight, Filter, X, Calendar, Upload, FileText, Check, AlertCircle, 
-  ChevronLeft, Camera, RefreshCw, Sparkles, Loader2
+  ChevronLeft, Camera, RefreshCw, Sparkles, Loader2, Crown, Zap, ShieldCheck
 } from 'lucide-react';
 import { TransactionType, Transaction, Category } from '../types';
 import { GoogleGenAI, Type } from "@google/genai";
 
 export const Transactions: React.FC = () => {
-  const { transactions, categories, accounts, addTransaction, updateTransaction, deleteTransaction, theme } = useFinance();
+  const { transactions, categories, accounts, user, addTransaction, updateTransaction, deleteTransaction, theme, updateUserProfile } = useFinance();
   const [showModal, setShowModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -24,23 +25,14 @@ export const Transactions: React.FC = () => {
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment');
 
-  // Filtros e Importação
   const [filters, setFilters] = useState({ startDate: '', endDate: '', categoryId: '', accountId: '' });
 
-  // Form State
   const [formData, setFormData] = useState({
-    description: '',
-    amount: '',
-    targetBalance: '',
+    description: '', amount: '', targetBalance: '',
     date: new Date().toISOString().split('T')[0],
-    categoryId: '',
-    accountId: '',
-    toAccountId: '',
-    type: 'expense' as TransactionType,
+    categoryId: '', accountId: '', toAccountId: '', type: 'expense' as TransactionType,
   });
 
-  // Efeito fundamental para corrigir a "tela preta":
-  // Anexa o stream ao vídeo somente quando o modal (e o elemento video) estiverem prontos no DOM.
   useEffect(() => {
     if (showScanner && stream && videoRef.current) {
       const video = videoRef.current;
@@ -64,37 +56,36 @@ export const Transactions: React.FC = () => {
     }
   }, [showModal, editingId, categories, accounts]);
 
-  // --- Lógica do Scanner OCR ---
-  
+  const handleScannerClick = () => {
+    if (user?.plan === 'premium') {
+      startCamera();
+    } else {
+      setShowUpgradeModal(true);
+    }
+  };
+
   const getInitialFacingMode = () => {
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
     return isMobile ? 'environment' : 'user';
   };
 
   const startCamera = async (mode?: 'user' | 'environment') => {
-    // Para o stream anterior se existir para liberar a câmera
     if (stream) {
       stream.getTracks().forEach(track => track.stop());
     }
-
     const modeToUse = mode || getInitialFacingMode();
     setFacingMode(modeToUse);
-
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({ 
-        video: { 
-          facingMode: modeToUse, 
-          width: { ideal: 1280 }, 
-          height: { ideal: 720 } 
-        } 
+        video: { facingMode: modeToUse, width: { ideal: 1280 }, height: { ideal: 720 } } 
       });
       setStream(mediaStream);
-      setShowScanner(true); // Isso monta o elemento <video> no DOM
+      setShowScanner(true);
     } catch (err) {
       if (!mode) {
         startCamera(modeToUse === 'environment' ? 'user' : 'environment');
       } else {
-        alert("Não foi possível acessar a câmera. Verifique se o site tem permissão e se nenhuma outra aba está usando a câmera.");
+        alert("Não foi possível acessar a câmera.");
         console.error(err);
       }
     }
@@ -115,24 +106,18 @@ export const Transactions: React.FC = () => {
 
   const captureAndScan = async () => {
     if (!videoRef.current || !canvasRef.current) return;
-    
     setIsScanning(true);
     const video = videoRef.current;
     const canvas = canvasRef.current;
-    
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     const ctx = canvas.getContext('2d');
-    
     if (facingMode === 'user') {
       ctx?.translate(canvas.width, 0);
       ctx?.scale(-1, 1);
     }
-    
     ctx?.drawImage(video, 0, 0);
-
     const base64Image = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
-    
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
@@ -157,9 +142,7 @@ export const Transactions: React.FC = () => {
           }
         }
       });
-
       const data = JSON.parse(response.text);
-      
       setFormData({
         description: `${data.estabelecimento}${data.resumo_itens ? ' (' + data.resumo_itens + ')' : ''}`,
         amount: data.valor_total.toString(),
@@ -170,43 +153,13 @@ export const Transactions: React.FC = () => {
         toAccountId: '',
         type: 'expense'
       });
-
       stopCamera();
       setShowModal(true);
     } catch (err) {
-      alert("Erro ao ler a nota. Certifique-se de que a foto está nítida e bem iluminada.");
-      console.error(err);
+      alert("Erro ao ler a nota. Tente novamente.");
     } finally {
       setIsScanning(false);
     }
-  };
-
-  const handleTypeChange = (newType: TransactionType) => {
-    const firstCatOfType = (newType === 'income' || newType === 'expense') 
-      ? (categories.find(c => c.type === newType)?.id || '')
-      : '';
-
-    setFormData(prev => ({
-      ...prev,
-      type: newType,
-      categoryId: firstCatOfType,
-      toAccountId: newType === 'transfer' ? (accounts.find(a => a.id !== prev.accountId)?.id || '') : ''
-    }));
-  };
-
-  const handleEdit = (t: Transaction) => {
-    setEditingId(t.id);
-    setFormData({
-      description: t.description,
-      amount: Math.abs(t.amount).toString(),
-      targetBalance: '',
-      date: t.date,
-      categoryId: t.categoryId,
-      accountId: t.accountId,
-      toAccountId: t.toAccountId || '',
-      type: t.type,
-    });
-    setShowModal(true);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -274,11 +227,12 @@ export const Transactions: React.FC = () => {
         </div>
         <div className="flex gap-2 flex-wrap">
           <button 
-            onClick={() => startCamera()}
-            className="flex items-center justify-center gap-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-slate-800/50 px-5 py-3 rounded-xl transition-all font-semibold hover:bg-emerald-100 dark:hover:bg-emerald-900/40 active:scale-[0.98]"
+            onClick={handleScannerClick}
+            className="flex items-center justify-center gap-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-slate-800/50 px-5 py-3 rounded-xl transition-all font-semibold hover:bg-emerald-100 dark:hover:bg-emerald-900/40 active:scale-[0.98] relative"
           >
             <Camera className="w-5 h-5" />
             Scanner de Nota
+            {user?.plan === 'basic' && <div className="absolute -top-2 -right-2 bg-amber-400 text-amber-900 rounded-full p-1 shadow-sm"><Crown className="w-3 h-3" /></div>}
           </button>
           <button 
             onClick={() => setShowImportModal(true)}
@@ -297,6 +251,7 @@ export const Transactions: React.FC = () => {
         </div>
       </div>
 
+      {/* Tabela e Filtros seguem o mesmo padrão... */}
       <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm space-y-4 transition-all">
         <div className="flex flex-col xl:flex-row gap-4">
           <div className="flex-1 relative min-w-[200px]">
@@ -357,7 +312,7 @@ export const Transactions: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 text-right">
                        <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
-                         <button onClick={() => handleEdit(t)} className="text-slate-400 hover:text-emerald-600 transition-colors"><Edit2 className="w-4 h-4" /></button>
+                         <button onClick={() => { setEditingId(t.id); setShowModal(true); }} className="text-slate-400 hover:text-emerald-600 transition-colors"><Edit2 className="w-4 h-4" /></button>
                          <button onClick={() => deleteTransaction(t.id)} className="text-slate-400 hover:text-rose-600 transition-colors"><Trash2 className="w-4 h-4" /></button>
                        </div>
                     </td>
@@ -369,23 +324,20 @@ export const Transactions: React.FC = () => {
         </div>
       </div>
 
+      {/* Modal Scanner Inteligente */}
       {showScanner && (
         <div className="fixed inset-0 z-[100] flex flex-col bg-black">
           <div className="p-6 flex items-center justify-between text-white z-10 bg-gradient-to-b from-black/80 to-transparent">
              <div>
                 <h3 className="text-xl font-bold flex items-center gap-2">
                    <Sparkles className="w-5 h-5 text-emerald-400" />
-                   Scanner Inteligente
+                   Scanner PRO
                 </h3>
-                <p className="text-xs text-slate-400">
-                  {facingMode === 'user' ? 'Usando câmera frontal' : 'Usando câmera traseira'}
-                </p>
              </div>
              <button onClick={stopCamera} className="p-2 bg-white/10 rounded-full hover:bg-white/20 transition-all">
                 <X className="w-6 h-6" />
              </button>
           </div>
-
           <div className="flex-1 relative flex items-center justify-center overflow-hidden">
              <video 
                 ref={videoRef} 
@@ -396,63 +348,81 @@ export const Transactions: React.FC = () => {
              />
              <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
                 <div className="w-[80%] aspect-[3/4] border-2 border-emerald-500/50 rounded-3xl shadow-[0_0_0_9999px_rgba(0,0,0,0.6)] flex items-center justify-center">
-                   <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-emerald-500 rounded-tl-xl" />
-                   <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-emerald-500 rounded-tr-xl" />
-                   <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-emerald-500 rounded-bl-xl" />
-                   <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-emerald-500 rounded-br-xl" />
-                   
                    {isScanning && (
                      <div className="absolute inset-0 bg-emerald-500/10 flex flex-col items-center justify-center gap-4">
                         <Loader2 className="w-12 h-12 text-emerald-400 animate-spin" />
-                        <span className="text-emerald-400 font-bold tracking-widest text-xs uppercase animate-pulse">Analisando Nota...</span>
+                        <span className="text-emerald-400 font-bold tracking-widest text-xs uppercase animate-pulse">Inteligência Gemini Ativa...</span>
                      </div>
                    )}
                 </div>
              </div>
           </div>
-
           <div className="p-10 flex items-center justify-center gap-8 bg-gradient-to-t from-black/80 to-transparent">
-             <button 
-                onClick={toggleCamera}
-                className="p-4 bg-white/10 rounded-full text-white hover:bg-white/20 transition-all"
-                title="Alternar Câmera"
-             >
-                <RefreshCw className="w-6 h-6" />
-             </button>
-             
-             <button 
-                disabled={isScanning}
-                onClick={captureAndScan}
-                className={`w-20 h-20 rounded-full border-4 border-white flex items-center justify-center transition-all active:scale-90
-                  ${isScanning ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/10'}`}
-             >
-                <div className="w-16 h-16 rounded-full bg-white flex items-center justify-center text-black">
-                   <Camera className="w-8 h-8" />
-                </div>
-             </button>
-             
+             <button onClick={toggleCamera} className="p-4 bg-white/10 rounded-full text-white hover:bg-white/20 transition-all"><RefreshCw className="w-6 h-6" /></button>
+             <button disabled={isScanning} onClick={captureAndScan} className="w-20 h-20 rounded-full border-4 border-white flex items-center justify-center transition-all active:scale-90"><div className="w-16 h-16 rounded-full bg-white flex items-center justify-center text-black"><Camera className="w-8 h-8" /></div></button>
              <div className="w-14" />
-             
              <canvas ref={canvasRef} className="hidden" />
           </div>
         </div>
       )}
 
+      {/* Paywall Modal (Upgrade) */}
+      {showUpgradeModal && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+           <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md" onClick={() => setShowUpgradeModal(false)} />
+           <div className="relative bg-white dark:bg-slate-900 w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in duration-300">
+              <div className="h-48 bg-gradient-to-br from-emerald-600 to-emerald-400 flex flex-col items-center justify-center text-white relative">
+                 <button onClick={() => setShowUpgradeModal(false)} className="absolute top-6 right-6 p-2 bg-white/10 rounded-full hover:bg-white/20 transition-all"><X className="w-5 h-5" /></button>
+                 <div className="w-20 h-20 bg-white/20 rounded-3xl flex items-center justify-center mb-4 backdrop-blur-sm"><Crown className="w-10 h-10 text-white" /></div>
+                 <h2 className="text-2xl font-black uppercase tracking-tighter">Verde PRO</h2>
+              </div>
+              <div className="p-8 space-y-6">
+                 <p className="text-center text-slate-600 dark:text-slate-400 font-medium">Libere o poder total da sua gestão financeira com IA.</p>
+                 <div className="space-y-4">
+                    <div className="flex items-center gap-4 p-4 bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl border border-emerald-100 dark:border-emerald-800/50">
+                       <Zap className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+                       <div>
+                          <p className="font-bold text-slate-800 dark:text-slate-200">Scanner Inteligente</p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">Leitura de notas fiscais via IA Gemini.</p>
+                       </div>
+                    </div>
+                    <div className="flex items-center gap-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800">
+                       <ShieldCheck className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+                       <div>
+                          <p className="font-bold text-slate-800 dark:text-slate-200">Previsões Avançadas</p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400">Análise profunda de fluxo de caixa futuro.</p>
+                       </div>
+                    </div>
+                 </div>
+                 <button 
+                  onClick={() => {
+                    updateUserProfile({ ...user!, plan: 'premium' });
+                    setShowUpgradeModal(false);
+                    alert("Parabéns! Você agora é um usuário PREMIUM.");
+                  }}
+                  className="w-full py-5 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-2xl shadow-xl shadow-emerald-200 dark:shadow-none transition-all active:scale-[0.98]"
+                 >
+                    QUERO SER PRO
+                 </button>
+                 <p className="text-center text-[10px] text-slate-400 dark:text-slate-500 uppercase font-bold tracking-widest">Apenas R$ 19,90 / mês</p>
+              </div>
+           </div>
+        </div>
+      )}
+
+      {/* Modal Cadastro/Edição Normal */}
       {showModal && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={handleCloseModal} />
           <div className="relative bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in duration-300">
             <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-              <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100">Confirmar Lançamento</h3>
+              <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100">{editingId ? 'Editar Lançamento' : 'Novo Lançamento'}</h3>
               <button onClick={handleCloseModal} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1"><Plus className="w-6 h-6 rotate-45" /></button>
             </div>
             <form onSubmit={handleSubmit} className="p-6 space-y-5">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
                 {['expense', 'income', 'transfer', 'adjustment'].map(type => (
-                  <button
-                    key={type} type="button" onClick={() => handleTypeChange(type as TransactionType)}
-                    className={`py-2 text-[10px] font-bold rounded-lg transition-all ${formData.type === type ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}
-                  >
+                  <button key={type} type="button" onClick={() => setFormData({...formData, type: type as any})} className={`py-2 text-[10px] font-bold rounded-lg transition-all ${formData.type === type ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}>
                     {type === 'expense' ? 'Despesa' : type === 'income' ? 'Receita' : type === 'transfer' ? 'Transf.' : 'Ajuste'}
                   </button>
                 ))}
@@ -490,17 +460,6 @@ export const Transactions: React.FC = () => {
               </button>
             </form>
           </div>
-        </div>
-      )}
-
-      {showImportModal && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
-           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowImportModal(false)} />
-           <div className="relative bg-white dark:bg-slate-900 w-full max-w-2xl rounded-3xl shadow-2xl p-6">
-              <h3 className="text-xl font-bold mb-4">Importar CSV</h3>
-              <p className="text-sm text-slate-500 mb-6">Em breve: Suporte completo para importação de extratos bancários.</p>
-              <button onClick={() => setShowImportModal(false)} className="w-full py-3 bg-slate-100 dark:bg-slate-800 rounded-xl font-bold">Fechar</button>
-           </div>
         </div>
       )}
     </div>
