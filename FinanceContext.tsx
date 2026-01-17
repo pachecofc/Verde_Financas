@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { FinanceState, Category, Account, Transaction, Budget, Schedule, UserProfile, Investment, Goal } from './types';
+import { FinanceState, Category, Account, Transaction, Budget, Schedule, UserProfile, Investment, Goal, Theme } from './types';
 import { INITIAL_CATEGORIES, INITIAL_ACCOUNTS } from './constants';
 
 interface FinanceContextType extends FinanceState {
@@ -28,6 +28,7 @@ interface FinanceContextType extends FinanceState {
   refreshState: () => void;
   updateUserProfile: (u: UserProfile) => void;
   logout: () => void;
+  toggleTheme: () => void;
 }
 
 const FinanceContext = createContext<FinanceContextType | undefined>(undefined);
@@ -35,22 +36,33 @@ const FinanceContext = createContext<FinanceContextType | undefined>(undefined);
 export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, setState] = useState<FinanceState>(() => {
     const saved = localStorage.getItem('verde_financas_state');
-    if (saved) return JSON.parse(saved);
+    const parsed = saved ? JSON.parse(saved) : null;
     return {
-      categories: INITIAL_CATEGORIES,
-      accounts: INITIAL_ACCOUNTS,
-      transactions: [],
-      budgets: [],
-      schedules: [],
-      investments: [],
-      goals: [],
-      user: null,
+      categories: parsed?.categories || INITIAL_CATEGORIES,
+      accounts: parsed?.accounts || INITIAL_ACCOUNTS,
+      transactions: parsed?.transactions || [],
+      budgets: parsed?.budgets || [],
+      schedules: parsed?.schedules || [],
+      investments: parsed?.investments || [],
+      goals: parsed?.goals || [],
+      user: parsed?.user || null,
+      theme: parsed?.theme || 'light',
     };
   });
 
   useEffect(() => {
     localStorage.setItem('verde_financas_state', JSON.stringify(state));
+    // Sincroniza a classe dark no HTML para o Tailwind
+    if (state.theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
   }, [state]);
+
+  const toggleTheme = useCallback(() => {
+    setState(prev => ({ ...prev, theme: prev.theme === 'light' ? 'dark' : 'light' }));
+  }, []);
 
   const updateUserProfile = useCallback((u: UserProfile) => {
     setState(prev => ({ ...prev, user: u }));
@@ -306,7 +318,7 @@ export const FinanceProvider: React.FC<{ children: React.ReactNode }> = ({ child
       addSchedule, updateSchedule, deleteSchedule,
       addInvestment, updateInvestment, deleteInvestment,
       addGoal, updateGoal, deleteGoal,
-      refreshState, updateUserProfile, logout
+      refreshState, updateUserProfile, logout, toggleTheme
     }}>
       {children}
     </FinanceContext.Provider>

@@ -293,23 +293,23 @@ export const Transactions: React.FC = () => {
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 transition-colors">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Transações</h1>
-          <p className="text-slate-500">Gerencie e filtre seus lançamentos por período e categoria.</p>
+          <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">Transações</h1>
+          <p className="text-slate-500 dark:text-slate-400">Gerencie e filtre seus lançamentos por período e categoria.</p>
         </div>
         <div className="flex gap-2">
           <button 
             onClick={() => setShowImportModal(true)}
-            className="flex items-center justify-center gap-2 bg-white text-emerald-600 border border-emerald-100 px-5 py-3 rounded-xl transition-all font-semibold hover:bg-emerald-50 active:scale-[0.98]"
+            className="flex items-center justify-center gap-2 bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-slate-800 px-5 py-3 rounded-xl transition-all font-semibold hover:bg-emerald-50 dark:hover:bg-slate-800 active:scale-[0.98]"
           >
             <Upload className="w-5 h-5" />
             Importar CSV
           </button>
           <button 
             onClick={() => { setEditingId(null); setShowModal(true); }}
-            className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl transition-all font-semibold shadow-lg shadow-emerald-100 active:scale-[0.98]"
+            className="flex items-center justify-center gap-2 bg-emerald-600 dark:bg-emerald-500 hover:bg-emerald-700 dark:hover:bg-emerald-400 text-white px-6 py-3 rounded-xl transition-all font-semibold shadow-lg shadow-emerald-100 dark:shadow-none active:scale-[0.98]"
           >
             <Plus className="w-5 h-5" />
             Novo Lançamento
@@ -318,40 +318,40 @@ export const Transactions: React.FC = () => {
       </div>
 
       {/* Barra de Filtros */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+      <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm space-y-4 transition-all">
         <div className="flex flex-col xl:flex-row gap-4">
           <div className="flex-1 relative min-w-[200px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 w-4 h-4" />
             <input 
               type="text" 
               placeholder="Buscar por descrição..." 
-              className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all outline-none"
+              className="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-700 dark:text-slate-100 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all outline-none"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-center">
-            <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 group focus-within:ring-2 focus-within:ring-emerald-500/20 focus-within:border-emerald-500 transition-all">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">De</span>
+            <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-1.5 group focus-within:ring-2 focus-within:ring-emerald-500/20 focus-within:border-emerald-500 transition-all">
+              <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-tighter">De</span>
               <input 
                 type="date"
-                className="bg-transparent text-xs outline-none w-full text-slate-700"
+                className="bg-transparent text-xs outline-none w-full text-slate-700 dark:text-slate-200"
                 value={filters.startDate}
                 onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
               />
             </div>
-            <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 group focus-within:ring-2 focus-within:ring-emerald-500/20 focus-within:border-emerald-500 transition-all">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Até</span>
+            <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-1.5 group focus-within:ring-2 focus-within:ring-emerald-500/20 focus-within:border-emerald-500 transition-all">
+              <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-tighter">Até</span>
               <input 
                 type="date"
-                className="bg-transparent text-xs outline-none w-full text-slate-700"
+                className="bg-transparent text-xs outline-none w-full text-slate-700 dark:text-slate-200"
                 value={filters.endDate}
                 onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
               />
             </div>
             <select 
-              className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-emerald-500/20"
+              className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-emerald-500/20"
               value={filters.categoryId}
               onChange={(e) => setFilters({ ...filters, categoryId: e.target.value })}
             >
@@ -367,7 +367,7 @@ export const Transactions: React.FC = () => {
               </optgroup>
             </select>
             <select 
-              className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-emerald-500/20"
+              className="px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-emerald-500/20"
               value={filters.accountId}
               onChange={(e) => setFilters({ ...filters, accountId: e.target.value })}
             >
@@ -377,7 +377,7 @@ export const Transactions: React.FC = () => {
           </div>
 
           {hasActiveFilters && (
-            <button onClick={clearFilters} className="flex items-center justify-center gap-1.5 px-4 py-2 text-rose-600 hover:bg-rose-50 rounded-xl transition-colors text-xs font-bold whitespace-nowrap">
+            <button onClick={clearFilters} className="flex items-center justify-center gap-1.5 px-4 py-2 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-xl transition-colors text-xs font-bold whitespace-nowrap">
               <X className="w-4 h-4" /> Limpar Filtros
             </button>
           )}
@@ -385,19 +385,19 @@ export const Transactions: React.FC = () => {
       </div>
 
       {/* Tabela de Transações */}
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm overflow-hidden transition-all">
         <div className="overflow-x-auto">
           <table className="w-full text-left">
-            <thead className="bg-slate-50 border-b border-slate-100">
+            <thead className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
               <tr>
-                <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Descrição</th>
-                <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Tipo/Cat</th>
-                <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Conta</th>
-                <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Valor</th>
-                <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Ações</th>
+                <th className="px-6 py-4 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Descrição</th>
+                <th className="px-6 py-4 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Tipo/Cat</th>
+                <th className="px-6 py-4 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Conta</th>
+                <th className="px-6 py-4 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right">Valor</th>
+                <th className="px-6 py-4 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right">Ações</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-50">
+            <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
               {filteredTransactions.map(t => {
                 const cat = categories.find(c => c.id === t.categoryId);
                 const parent = cat?.parentId ? categories.find(c => c.id === cat.parentId) : null;
@@ -405,51 +405,51 @@ export const Transactions: React.FC = () => {
                 const toAcc = t.toAccountId ? accounts.find(a => a.id === t.toAccountId) : null;
                 
                 return (
-                  <tr key={t.id} className="hover:bg-slate-50/50 transition-colors group">
+                  <tr key={t.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors group">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
-                         {t.type === 'transfer' && <ArrowRightLeft className="w-4 h-4 text-blue-500" />}
-                         {t.type === 'adjustment' && <SlidersHorizontal className="w-4 h-4 text-purple-500" />}
+                         {t.type === 'transfer' && <ArrowRightLeft className="w-4 h-4 text-blue-500 dark:text-blue-400" />}
+                         {t.type === 'adjustment' && <SlidersHorizontal className="w-4 h-4 text-purple-500 dark:text-purple-400" />}
                          <div>
-                            <p className="font-medium text-slate-900">{t.description}</p>
-                            <p className="text-xs text-slate-400">{new Date(t.date + 'T00:00:00').toLocaleDateString()}</p>
+                            <p className="font-medium text-slate-900 dark:text-slate-100">{t.description}</p>
+                            <p className="text-xs text-slate-400 dark:text-slate-500">{new Date(t.date + 'T00:00:00').toLocaleDateString()}</p>
                          </div>
                       </div>
                     </td>
                     <td className="px-6 py-4">
                       {t.type === 'transfer' ? (
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 uppercase tracking-wider">Transferência</span>
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400 uppercase tracking-wider">Transferência</span>
                       ) : t.type === 'adjustment' ? (
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold bg-purple-50 text-purple-700 uppercase tracking-wider">Ajuste</span>
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-400 uppercase tracking-wider">Ajuste</span>
                       ) : (
                         <div className="flex flex-col">
-                          {parent && <span className="text-[9px] text-slate-400 font-bold uppercase tracking-tighter flex items-center gap-0.5">{parent.name} <ChevronRight className="w-2 h-2" /></span>}
-                          <span className="inline-flex items-center text-xs font-medium text-slate-800">
+                          {parent && <span className="text-[9px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-tighter flex items-center gap-0.5">{parent.name} <ChevronRight className="w-2 h-2" /></span>}
+                          <span className="inline-flex items-center text-xs font-medium text-slate-800 dark:text-slate-200">
                             {cat?.icon} {cat?.name}
                           </span>
                         </div>
                       )}
                     </td>
-                    <td className="px-6 py-4 text-sm text-slate-500">
+                    <td className="px-6 py-4 text-sm text-slate-500 dark:text-slate-400">
                       {t.type === 'transfer' ? (
                         <div className="flex items-center gap-2">
-                           <span className="font-medium text-slate-700">{acc?.name}</span> 
-                           <ArrowRightLeft className="w-3 h-3 text-slate-400" /> 
-                           <span className="font-medium text-slate-700">{toAcc?.name}</span>
+                           <span className="font-medium text-slate-700 dark:text-slate-300">{acc?.name}</span> 
+                           <ArrowRightLeft className="w-3 h-3 text-slate-400 dark:text-slate-600" /> 
+                           <span className="font-medium text-slate-700 dark:text-slate-300">{toAcc?.name}</span>
                         </div>
                       ) : acc?.name}
                     </td>
                     <td className={`px-6 py-4 text-sm font-bold text-right ${
-                      t.type === 'income' ? 'text-emerald-600' : 
-                      t.type === 'expense' ? 'text-slate-900' :
-                      t.type === 'adjustment' ? (t.amount >= 0 ? 'text-emerald-600' : 'text-rose-600') : 'text-blue-600'
+                      t.type === 'income' ? 'text-emerald-600 dark:text-emerald-400' : 
+                      t.type === 'expense' ? 'text-slate-900 dark:text-slate-100' :
+                      t.type === 'adjustment' ? (t.amount >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400') : 'text-blue-600 dark:text-blue-400'
                     }`}>
                       {t.type === 'income' ? '+' : t.type === 'expense' ? '-' : t.amount >= 0 ? '+' : '-'} {formatCurrency(Math.abs(t.amount))}
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={() => handleEdit(t)} className="text-slate-400 hover:text-emerald-600 transition-colors p-1"><Edit2 className="w-4 h-4" /></button>
-                        <button onClick={() => deleteTransaction(t.id)} className="text-slate-400 hover:text-rose-600 transition-colors p-1"><Trash2 className="w-4 h-4" /></button>
+                        <button onClick={() => handleEdit(t)} className="text-slate-400 dark:text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors p-1"><Edit2 className="w-4 h-4" /></button>
+                        <button onClick={() => deleteTransaction(t.id)} className="text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 transition-colors p-1"><Trash2 className="w-4 h-4" /></button>
                       </div>
                     </td>
                   </tr>
@@ -464,13 +464,13 @@ export const Transactions: React.FC = () => {
       {showImportModal && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowImportModal(false)} />
-          <div className="relative bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in duration-300">
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+          <div className="relative bg-white dark:bg-slate-900 w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in duration-300">
+            <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
               <div>
-                <h3 className="text-xl font-bold text-slate-900">Importar CSV</h3>
-                <p className="text-xs text-slate-400 uppercase font-bold tracking-widest mt-1">Passo {importStep} de 3</p>
+                <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100">Importar CSV</h3>
+                <p className="text-xs text-slate-400 dark:text-slate-500 uppercase font-bold tracking-widest mt-1">Passo {importStep} de 3</p>
               </div>
-              <button onClick={() => setShowImportModal(false)} className="text-slate-400 hover:text-slate-600 p-2 bg-slate-50 rounded-full transition-all">
+              <button onClick={() => setShowImportModal(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-2 bg-slate-50 dark:bg-slate-800 rounded-full transition-all">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -486,25 +486,25 @@ export const Transactions: React.FC = () => {
                     onDrop={handleDrop}
                     className={`border-2 border-dashed rounded-3xl p-12 flex flex-col items-center justify-center gap-4 transition-all cursor-pointer group
                       ${isDragging 
-                        ? 'border-emerald-500 bg-emerald-50' 
-                        : 'border-slate-200 hover:border-emerald-500 hover:bg-emerald-50/50'}`}
+                        ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/10' 
+                        : 'border-slate-200 dark:border-slate-800 hover:border-emerald-500 dark:hover:border-emerald-400 hover:bg-emerald-50/50 dark:hover:bg-slate-800'}`}
                   >
                     <div className={`w-16 h-16 rounded-2xl flex items-center justify-center transition-transform
-                      ${isDragging ? 'bg-emerald-600 text-white scale-110' : 'bg-emerald-50 text-emerald-600 group-hover:scale-110'}`}>
+                      ${isDragging ? 'bg-emerald-600 dark:bg-emerald-500 text-white scale-110' : 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 group-hover:scale-110'}`}>
                       <FileText className="w-8 h-8" />
                     </div>
                     <div className="text-center">
-                      <p className="text-lg font-bold text-slate-700">
+                      <p className="text-lg font-bold text-slate-700 dark:text-slate-200">
                         {isDragging ? 'Solte o arquivo aqui!' : 'Arraste seu arquivo CSV ou clique aqui'}
                       </p>
-                      <p className="text-sm text-slate-400">Extrato bancário, faturas de cartão, etc.</p>
+                      <p className="text-sm text-slate-400 dark:text-slate-500">Extrato bancário, faturas de cartão, etc.</p>
                     </div>
                   </div>
                   <input type="file" ref={fileInputRef} className="hidden" accept=".csv" onChange={handleFileSelect} />
                   
-                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex gap-3">
-                     <AlertCircle className="w-5 h-5 text-emerald-600 shrink-0" />
-                     <p className="text-xs text-slate-600 leading-relaxed">Dica: Quase todos os bancos brasileiros usam ponto e vírgula (;), mas alguns como o Nubank podem exportar com vírgula (,) dependendo do dispositivo.</p>
+                  <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 flex gap-3">
+                     <AlertCircle className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                     <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">Dica: Quase todos os bancos brasileiros usam ponto e vírgula (;), mas alguns como o Nubank podem exportar com vírgula (,) dependendo do dispositivo.</p>
                   </div>
                 </div>
               )}
@@ -514,9 +514,9 @@ export const Transactions: React.FC = () => {
                 <div className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-1">
-                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Separador do Arquivo</label>
+                      <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Separador do Arquivo</label>
                       <select 
-                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none"
+                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-xl outline-none"
                         value={mapping.separator}
                         onChange={(e) => {
                           const newSep = e.target.value;
@@ -530,9 +530,9 @@ export const Transactions: React.FC = () => {
                       </select>
                     </div>
                     <div className="space-y-1">
-                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Conta para Importar</label>
+                      <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Conta para Importar</label>
                       <select 
-                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none"
+                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-xl outline-none"
                         value={mapping.accountId}
                         onChange={(e) => setMapping({...mapping, accountId: e.target.value})}
                       >
@@ -541,26 +541,26 @@ export const Transactions: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="bg-emerald-50/50 p-6 rounded-3xl border border-emerald-100 space-y-4">
-                    <h4 className="text-sm font-bold text-emerald-800 flex items-center gap-2"><SlidersHorizontal className="w-4 h-4" /> Mapeamento de Colunas</h4>
+                  <div className="bg-emerald-50/50 dark:bg-emerald-900/10 p-6 rounded-3xl border border-emerald-100 dark:border-emerald-900/30 space-y-4 transition-all">
+                    <h4 className="text-sm font-bold text-emerald-800 dark:text-emerald-400 flex items-center gap-2"><SlidersHorizontal className="w-4 h-4" /> Mapeamento de Colunas</h4>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-emerald-600 uppercase">Data</label>
-                        <select className="w-full px-3 py-2 bg-white border border-emerald-100 rounded-lg text-sm" value={mapping.date} onChange={e => setMapping({...mapping, date: parseInt(e.target.value)})}>
+                        <label className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase">Data</label>
+                        <select className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-emerald-100 dark:border-emerald-900/30 dark:text-slate-200 rounded-lg text-sm" value={mapping.date} onChange={e => setMapping({...mapping, date: parseInt(e.target.value)})}>
                           <option value="-1">Selecionar...</option>
                           {csvHeaders.map((h, i) => <option key={i} value={i}>{h || `Coluna ${i+1}`}</option>)}
                         </select>
                       </div>
                       <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-emerald-600 uppercase">Descrição</label>
-                        <select className="w-full px-3 py-2 bg-white border border-emerald-100 rounded-lg text-sm" value={mapping.description} onChange={e => setMapping({...mapping, description: parseInt(e.target.value)})}>
+                        <label className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase">Descrição</label>
+                        <select className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-emerald-100 dark:border-emerald-900/30 dark:text-slate-200 rounded-lg text-sm" value={mapping.description} onChange={e => setMapping({...mapping, description: parseInt(e.target.value)})}>
                           <option value="-1">Selecionar...</option>
                           {csvHeaders.map((h, i) => <option key={i} value={i}>{h || `Coluna ${i+1}`}</option>)}
                         </select>
                       </div>
                       <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-emerald-600 uppercase">Valor (R$)</label>
-                        <select className="w-full px-3 py-2 bg-white border border-emerald-100 rounded-lg text-sm" value={mapping.amount} onChange={e => setMapping({...mapping, amount: parseInt(e.target.value)})}>
+                        <label className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase">Valor (R$)</label>
+                        <select className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-emerald-100 dark:border-emerald-900/30 dark:text-slate-200 rounded-lg text-sm" value={mapping.amount} onChange={e => setMapping({...mapping, amount: parseInt(e.target.value)})}>
                           <option value="-1">Selecionar...</option>
                           {csvHeaders.map((h, i) => <option key={i} value={i}>{h || `Coluna ${i+1}`}</option>)}
                         </select>
@@ -569,10 +569,10 @@ export const Transactions: React.FC = () => {
                   </div>
 
                   <div className="flex justify-between pt-4">
-                    <button onClick={() => { setImportStep(1); setCsvRawData([]); setRawCsvText(''); }} className="flex items-center gap-2 text-slate-500 font-bold hover:text-slate-700 transition-all">
+                    <button onClick={() => { setImportStep(1); setCsvRawData([]); setRawCsvText(''); }} className="flex items-center gap-2 text-slate-500 dark:text-slate-400 font-bold hover:text-slate-700 dark:hover:text-slate-200 transition-all">
                       <ChevronLeft className="w-5 h-5" /> Voltar
                     </button>
-                    <button onClick={generateImportPreview} className="bg-emerald-600 text-white px-8 py-3 rounded-2xl font-bold shadow-lg shadow-emerald-100 hover:bg-emerald-700 transition-all">
+                    <button onClick={generateImportPreview} className="bg-emerald-600 dark:bg-emerald-500 text-white px-8 py-3 rounded-2xl font-bold shadow-lg shadow-emerald-100 dark:shadow-none hover:bg-emerald-700 dark:hover:bg-emerald-400 transition-all">
                       Gerar Prévia
                     </button>
                   </div>
@@ -582,23 +582,23 @@ export const Transactions: React.FC = () => {
               {/* Passo 3: Revisão */}
               {importStep === 3 && (
                 <div className="space-y-6">
-                  <div className="max-h-[300px] overflow-y-auto border border-slate-100 rounded-2xl">
+                  <div className="max-h-[300px] overflow-y-auto border border-slate-100 dark:border-slate-800 rounded-2xl">
                     <table className="w-full text-left text-xs">
-                      <thead className="bg-slate-50 sticky top-0">
+                      <thead className="bg-slate-50 dark:bg-slate-800 sticky top-0">
                         <tr>
-                          <th className="px-4 py-3"><input type="checkbox" checked={importPreview.length > 0 && importPreview.every(p => p.selected)} onChange={(e) => setImportPreview(importPreview.map(p => ({...p, selected: e.target.checked})))} /></th>
-                          <th className="px-4 py-3 text-slate-400 font-bold uppercase">Data</th>
-                          <th className="px-4 py-3 text-slate-400 font-bold uppercase">Descrição</th>
-                          <th className="px-4 py-3 text-slate-400 font-bold uppercase text-right">Valor</th>
+                          <th className="px-4 py-3"><input type="checkbox" className="accent-emerald-500" checked={importPreview.length > 0 && importPreview.every(p => p.selected)} onChange={(e) => setImportPreview(importPreview.map(p => ({...p, selected: e.target.checked})))} /></th>
+                          <th className="px-4 py-3 text-slate-400 dark:text-slate-500 font-bold uppercase">Data</th>
+                          <th className="px-4 py-3 text-slate-400 dark:text-slate-500 font-bold uppercase">Descrição</th>
+                          <th className="px-4 py-3 text-slate-400 dark:text-slate-500 font-bold uppercase text-right">Valor</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-50">
+                      <tbody className="divide-y divide-slate-50 dark:divide-slate-800">
                         {importPreview.map(row => (
-                          <tr key={row.id} className={`hover:bg-slate-50 transition-colors ${!row.selected ? 'opacity-50' : ''}`}>
-                            <td className="px-4 py-3"><input type="checkbox" checked={row.selected} onChange={() => setImportPreview(importPreview.map(p => p.id === row.id ? {...p, selected: !p.selected} : p))} /></td>
-                            <td className="px-4 py-3 font-medium">{new Date(row.date + 'T00:00:00').toLocaleDateString()}</td>
-                            <td className="px-4 py-3 truncate max-w-[200px]">{row.description}</td>
-                            <td className={`px-4 py-3 font-bold text-right ${row.type === 'income' ? 'text-emerald-600' : 'text-slate-900'}`}>
+                          <tr key={row.id} className={`hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors ${!row.selected ? 'opacity-50' : ''}`}>
+                            <td className="px-4 py-3"><input type="checkbox" className="accent-emerald-500" checked={row.selected} onChange={() => setImportPreview(importPreview.map(p => p.id === row.id ? {...p, selected: !p.selected} : p))} /></td>
+                            <td className="px-4 py-3 font-medium dark:text-slate-300">{new Date(row.date + 'T00:00:00').toLocaleDateString()}</td>
+                            <td className="px-4 py-3 truncate max-w-[200px] dark:text-slate-300">{row.description}</td>
+                            <td className={`px-4 py-3 font-bold text-right ${row.type === 'income' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-900 dark:text-slate-200'}`}>
                               {row.type === 'income' ? '+' : '-'} {formatCurrency(row.amount)}
                             </td>
                           </tr>
@@ -607,16 +607,16 @@ export const Transactions: React.FC = () => {
                     </table>
                   </div>
 
-                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex items-center justify-between">
-                     <p className="text-sm font-bold text-slate-600">{importPreview.filter(p => p.selected).length} transações selecionadas</p>
-                     <p className="text-xs text-slate-400">Padrão: {accounts.find(a => a.id === mapping.accountId)?.name}</p>
+                  <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                     <p className="text-sm font-bold text-slate-600 dark:text-slate-300">{importPreview.filter(p => p.selected).length} transações selecionadas</p>
+                     <p className="text-xs text-slate-400 dark:text-slate-500">Padrão: {accounts.find(a => a.id === mapping.accountId)?.name}</p>
                   </div>
 
                   <div className="flex justify-between pt-4">
-                    <button onClick={() => setImportStep(2)} className="flex items-center gap-2 text-slate-500 font-bold hover:text-slate-700 transition-all">
+                    <button onClick={() => setImportStep(2)} className="flex items-center gap-2 text-slate-500 dark:text-slate-400 font-bold hover:text-slate-700 dark:hover:text-slate-200 transition-all">
                       <ChevronLeft className="w-5 h-5" /> Voltar
                     </button>
-                    <button onClick={handleFinalImport} className="flex items-center gap-2 bg-emerald-600 text-white px-8 py-4 rounded-2xl font-bold shadow-lg shadow-emerald-100 hover:bg-emerald-700 transition-all active:scale-[0.98]">
+                    <button onClick={handleFinalImport} className="flex items-center gap-2 bg-emerald-600 dark:bg-emerald-500 text-white px-8 py-4 rounded-2xl font-bold shadow-lg shadow-emerald-100 dark:shadow-none hover:bg-emerald-700 dark:hover:bg-emerald-400 transition-all active:scale-[0.98]">
                       <Check className="w-5 h-5" /> Finalizar Importação
                     </button>
                   </div>
@@ -627,17 +627,17 @@ export const Transactions: React.FC = () => {
         </div>
       )}
 
-      {/* Modal Cadastro Manual (Novo Lançamento) */}
+      {/* Modal Cadastro Manual */}
       {showModal && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={handleCloseModal} />
-          <div className="relative bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in duration-300">
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-              <h3 className="text-xl font-bold text-slate-900">{editingId ? 'Editar Lançamento' : 'Novo Lançamento'}</h3>
-              <button onClick={handleCloseModal} className="text-slate-400 hover:text-slate-600 p-1"><Plus className="w-6 h-6 rotate-45" /></button>
+          <div className="relative bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in duration-300">
+            <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+              <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100">{editingId ? 'Editar Lançamento' : 'Novo Lançamento'}</h3>
+              <button onClick={handleCloseModal} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1"><Plus className="w-6 h-6 rotate-45" /></button>
             </div>
             <form onSubmit={handleSubmit} className="p-6 space-y-5">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-slate-100 p-1 rounded-xl">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
                 {[
                   { id: 'expense', label: 'Despesa' },
                   { id: 'income', label: 'Receita' },
@@ -648,7 +648,7 @@ export const Transactions: React.FC = () => {
                     key={type.id}
                     type="button"
                     onClick={() => handleTypeChange(type.id as TransactionType)}
-                    className={`py-2 text-xs font-bold rounded-lg transition-all ${formData.type === type.id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
+                    className={`py-2 text-xs font-bold rounded-lg transition-all ${formData.type === type.id ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm' : 'text-slate-500 dark:text-slate-400'}`}
                   >
                     {type.label}
                   </button>
@@ -656,10 +656,10 @@ export const Transactions: React.FC = () => {
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Descrição</label>
+                <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Descrição</label>
                 <input 
                   type="text" required
-                  className="w-full px-4 py-2 border border-slate-200 rounded-lg outline-none focus:border-emerald-500 transition-all"
+                  className="w-full px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 dark:text-slate-100 rounded-lg outline-none focus:border-emerald-500 transition-all"
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 />
@@ -667,40 +667,40 @@ export const Transactions: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Valor (R$)</label>
+                  <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Valor (R$)</label>
                   <input 
                     type="number" step="0.01" required
-                    className="w-full px-4 py-2 border border-slate-200 rounded-lg outline-none focus:border-emerald-500"
+                    className="w-full px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 dark:text-slate-100 rounded-lg outline-none focus:border-emerald-500"
                     value={formData.type === 'adjustment' ? formData.targetBalance : formData.amount}
                     onChange={(e) => setFormData({ ...formData, [formData.type === 'adjustment' ? 'targetBalance' : 'amount']: e.target.value })}
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Data</label>
-                  <input type="date" required className="w-full px-4 py-2 border border-slate-200 rounded-lg outline-none focus:border-emerald-500" value={formData.date} onChange={(e) => setFormData({ ...formData, date: e.target.value })} />
+                  <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Data</label>
+                  <input type="date" required className="w-full px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 dark:text-slate-100 rounded-lg outline-none focus:border-emerald-500" value={formData.date} onChange={(e) => setFormData({ ...formData, date: e.target.value })} />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Conta</label>
-                  <select required className="w-full px-4 py-2 border border-slate-200 rounded-lg bg-white outline-none focus:border-emerald-500" value={formData.accountId} onChange={(e) => setFormData({ ...formData, accountId: e.target.value })}>
+                  <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Conta</label>
+                  <select required className="w-full px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 dark:text-slate-100 rounded-lg outline-none focus:border-emerald-500" value={formData.accountId} onChange={(e) => setFormData({ ...formData, accountId: e.target.value })}>
                     <option value="">Selecione...</option>
                     {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                   </select>
                 </div>
                 {formData.type === 'transfer' ? (
                   <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Conta Destino</label>
-                    <select required className="w-full px-4 py-2 border border-slate-200 rounded-lg bg-white outline-none focus:border-emerald-500" value={formData.toAccountId} onChange={(e) => setFormData({ ...formData, toAccountId: e.target.value })}>
+                    <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Conta Destino</label>
+                    <select required className="w-full px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 dark:text-slate-100 rounded-lg outline-none focus:border-emerald-500" value={formData.toAccountId} onChange={(e) => setFormData({ ...formData, toAccountId: e.target.value })}>
                       <option value="">Selecione...</option>
                       {accounts.filter(a => a.id !== formData.accountId).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                     </select>
                   </div>
                 ) : formData.type === 'adjustment' ? null : (
                   <div className="space-y-1">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Categoria</label>
-                    <select required className="w-full px-4 py-2 border border-slate-200 rounded-lg bg-white outline-none focus:border-emerald-500" value={formData.categoryId} onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}>
+                    <label className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Categoria</label>
+                    <select required className="w-full px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 dark:text-slate-100 rounded-lg outline-none focus:border-emerald-500" value={formData.categoryId} onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}>
                       <option value="">Selecione...</option>
                       {categories
                         .filter(c => c.type === (formData.type === 'income' ? 'income' : 'expense'))
@@ -713,7 +713,7 @@ export const Transactions: React.FC = () => {
                 )}
               </div>
 
-              <button type="submit" className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-lg transition-all mt-4 active:scale-[0.98]">
+              <button type="submit" className="w-full py-4 bg-emerald-600 dark:bg-emerald-500 hover:bg-emerald-700 dark:hover:bg-emerald-400 text-white font-bold rounded-xl shadow-lg dark:shadow-none transition-all mt-4 active:scale-[0.98]">
                 {editingId ? 'Salvar Alterações' : 'Confirmar Lançamento'}
               </button>
             </form>

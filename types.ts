@@ -1,5 +1,6 @@
 
 export type TransactionType = 'income' | 'expense' | 'transfer' | 'adjustment';
+export type Theme = 'light' | 'dark';
 
 export interface Category {
   id: string;
@@ -82,4 +83,5 @@ export interface FinanceState {
   investments: Investment[];
   goals: Goal[];
   user: UserProfile | null;
+  theme: Theme;
 }
