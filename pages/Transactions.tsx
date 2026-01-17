@@ -16,6 +16,7 @@ export const Transactions: React.FC = () => {
 
   // States para Importação
   const [importStep, setImportStep] = useState(1);
+  const [rawCsvText, setRawCsvText] = useState('');
   const [csvRawData, setCsvRawData] = useState<string[][]>([]);
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [mapping, setMapping] = useState({
@@ -138,6 +139,7 @@ export const Transactions: React.FC = () => {
     const reader = new FileReader();
     reader.onload = (event) => {
       const text = event.target?.result as string;
+      setRawCsvText(text);
       processCsvText(text, mapping.separator);
     };
     reader.readAsText(file);
@@ -150,18 +152,44 @@ export const Transactions: React.FC = () => {
     const rows = lines.map(line => line.split(sep).map(cell => cell.trim().replace(/^"|"$/g, '')));
     setCsvHeaders(rows[0]);
     setCsvRawData(rows.slice(1));
-    setMapping(prev => ({ ...prev, accountId: accounts[0]?.id || '' }));
+    setMapping(prev => ({ 
+      ...prev, 
+      accountId: prev.accountId || (accounts[0]?.id || ''),
+      // Resetar mapeamentos se o cabeçalho mudar drasticamente
+      date: -1, description: -1, amount: -1
+    }));
     setImportStep(2);
+  };
+
+  const parseValue = (val: string): number => {
+    let clean = val.replace(/[R$\s]/g, '');
+    if (!clean) return 0;
+
+    // Lógica para detectar se o separador decimal é ponto ou vírgula
+    const lastComma = clean.lastIndexOf(',');
+    const lastDot = clean.lastIndexOf('.');
+
+    if (lastComma > lastDot) {
+      // Formato BR: 1.234,56 ou 50,00
+      return parseFloat(clean.replace(/\./g, '').replace(',', '.'));
+    } else if (lastDot > lastComma) {
+      // Formato US/International: 1,234.56 ou 50.00
+      return parseFloat(clean.replace(/,/g, ''));
+    } else {
+      // Apenas um deles ou nenhum
+      if (lastComma !== -1) return parseFloat(clean.replace(',', '.'));
+      return parseFloat(clean);
+    }
   };
 
   const generateImportPreview = () => {
     if (mapping.date === -1 || mapping.description === -1 || mapping.amount === -1) {
-      alert("Mapeie as colunas de Data, Descrição e Valor primeiro.");
+      alert("Por favor, selecione as colunas de Data, Descrição e Valor.");
       return;
     }
 
     const preview = csvRawData.map((row, idx) => {
-      let rawDate = row[mapping.date];
+      let rawDate = row[mapping.date] || '';
       let date = rawDate;
       // Tenta converter DD/MM/AAAA para AAAA-MM-DD
       if (rawDate.includes('/')) {
@@ -171,13 +199,12 @@ export const Transactions: React.FC = () => {
         }
       }
 
-      let rawAmount = row[mapping.amount].replace(/[R$\s.]/g, '').replace(',', '.');
-      let amount = parseFloat(rawAmount);
+      let amount = parseValue(row[mapping.amount] || '0');
 
       return {
         id: `prev-${idx}`,
         date,
-        description: row[mapping.description],
+        description: row[mapping.description] || 'Sem descrição',
         amount: Math.abs(amount),
         type: amount >= 0 ? 'income' : 'expense',
         selected: !isNaN(amount) && date.length >= 10
@@ -208,6 +235,7 @@ export const Transactions: React.FC = () => {
     setImportStep(1);
     setImportPreview([]);
     setCsvRawData([]);
+    setRawCsvText('');
   };
 
   // --- UI Helpers ---
@@ -446,7 +474,7 @@ export const Transactions: React.FC = () => {
                   
                   <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex gap-3">
                      <AlertCircle className="w-5 h-5 text-emerald-600 shrink-0" />
-                     <p className="text-xs text-slate-600 leading-relaxed">Dica: Se o seu arquivo usar ponto e vírgula como separador, mudaremos isso no próximo passo. Quase todos os bancos brasileiros usam ponto e vírgula.</p>
+                     <p className="text-xs text-slate-600 leading-relaxed">Dica: Quase todos os bancos brasileiros usam ponto e vírgula (;), mas alguns como o Nubank podem exportar com vírgula (,) dependendo do dispositivo.</p>
                   </div>
                 </div>
               )}
@@ -462,13 +490,14 @@ export const Transactions: React.FC = () => {
                         value={mapping.separator}
                         onChange={(e) => {
                           const newSep = e.target.value;
-                          setMapping({...mapping, separator: newSep});
-                          // Reprocessar o texto se mudar o separador (o texto raw precisa estar em algum lugar, ou re-ler o arquivo)
-                          // Por simplicidade, vamos apenas alertar que o usuário deve re-fazer o upload se mudar o separador
+                          setMapping(prev => ({ ...prev, separator: newSep }));
+                          // Re-processa o texto raw imediatamente com o novo separador
+                          processCsvText(rawCsvText, newSep);
                         }}
                       >
                         <option value=";">Ponto e vírgula (;)</option>
                         <option value=",">Vírgula (,)</option>
+                        <option value="\t">Tabulação (Tab)</option>
                       </select>
                     </div>
                     <div className="space-y-1">
@@ -511,7 +540,7 @@ export const Transactions: React.FC = () => {
                   </div>
 
                   <div className="flex justify-between pt-4">
-                    <button onClick={() => setImportStep(1)} className="flex items-center gap-2 text-slate-500 font-bold hover:text-slate-700 transition-all">
+                    <button onClick={() => { setImportStep(1); setCsvRawData([]); setRawCsvText(''); }} className="flex items-center gap-2 text-slate-500 font-bold hover:text-slate-700 transition-all">
                       <ChevronLeft className="w-5 h-5" /> Voltar
                     </button>
                     <button onClick={generateImportPreview} className="bg-emerald-600 text-white px-8 py-3 rounded-2xl font-bold shadow-lg shadow-emerald-100 hover:bg-emerald-700 transition-all">
@@ -528,7 +557,7 @@ export const Transactions: React.FC = () => {
                     <table className="w-full text-left text-xs">
                       <thead className="bg-slate-50 sticky top-0">
                         <tr>
-                          <th className="px-4 py-3"><input type="checkbox" checked={importPreview.every(p => p.selected)} onChange={(e) => setImportPreview(importPreview.map(p => ({...p, selected: e.target.checked})))} /></th>
+                          <th className="px-4 py-3"><input type="checkbox" checked={importPreview.length > 0 && importPreview.every(p => p.selected)} onChange={(e) => setImportPreview(importPreview.map(p => ({...p, selected: e.target.checked})))} /></th>
                           <th className="px-4 py-3 text-slate-400 font-bold uppercase">Data</th>
                           <th className="px-4 py-3 text-slate-400 font-bold uppercase">Descrição</th>
                           <th className="px-4 py-3 text-slate-400 font-bold uppercase text-right">Valor</th>
